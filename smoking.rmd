@@ -1,0 +1,1807 @@
+---
+title: Prognozowanie kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne w
+  USA zależności od wybranych czynników dla danej populacji beneficjentów palących.
+output:
+  word_document:
+    toc: yes
+  pdf_document:
+    toc: yes
+  html_document:
+    toc: yes
+    toc_float: yes
+    theme: flatly
+    code_folding: hide
+---
+**1) W pierwszym etapie dokonano estymacji, a kolejno weryfikacji otrzymanych modeli liniowych objaśniających koszty leczenia rozliczane przez ubezpieczenie zdrowotne danego beneficjenta PALĄCEGO. Dokonano estymacji klasyczną metodą MNK - metoda najmniejszych kwadratów.**
+
+
+**Niezbędne pakiety:**
+```{r message=FALSE, warning=FALSE}
+library("car") # funkcja vif()
+library("ggplot2") # wykresy - funkcja ggplot()
+library("lmtest") # testy diagnostyczne modeli lm
+library("pscl") #pseudo-R2 funkcja pR2()
+library("pROC") #funkcje roc, auc
+```
+
+**Wczytanie danych i podstawowe statystyki opisowe dla poszczególnych zmiennych: **
+```{r}
+dane1 <-  read.table("palacy.csv", header = TRUE, sep = ";",dec=",")
+dane1$sex<-as.factor(dane1$sex)
+dane1$region<-as.factor(dane1$region)
+summary(dane1)
+```
+
+**Na początku stworzono modele objaśniające koszty leczenia rozliczane przez ubezpieczenie zdrowotne w zależności od każdej ze zmiennych z osobna**
+
+**Model liniowy 1 ze zmienną `age`**
+```{r}
+#h: koszty leczenia rozliczane przez ubezpieczenie zdrowotne w zależności od wieku beneficjenta palącego
+m1 <- lm(charges  ~ age, data = dane1)
+summary(m1)
+```
+
+* charges=20294.13+20294.13*`age`
+
+Miary dopasowania:
+
+* odchylenie standardowe reszt: Se = 10750
+* Współczynnik determinacji R^2=0.1356
+* R^2 skorygowany=0.1324 
+
+**Wniosek:**
+Model 1 wyjaśnia 13,56% kształtowania się kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+**Model liniowy 2 ze zmienną `sex`**
+```{r}
+#h: koszty leczenia rozliczane przez ubezpieczenie zdrowotne w zależności od płci beneficjenta palącego
+m2 <- lm(charges  ~ sex, data = dane1)
+summary(m2)
+```
+* charges=30679+2363*`sex`
+
+Miary dopasowania:
+
+* odchylenie standardowe reszt: Se = 11500
+* Współczynnik determinacji R^2=0.01025
+* R^2 skorygowany=0.006608 
+
+**Wniosek:**
+Model 2 wyjaśnia 1,03% kształtowania się kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+**Model liniowy 3 ze zmienną `bmi`**
+```{r}
+#h: koszty leczenia rozliczane przez ubezpieczenie zdrowotne w zależności od bmi beneficjenta palącego
+m3 <- lm(charges  ~ bmi, data = dane1)
+summary(m3)
+```
+
+* charges=-13186.58+1473.11*`bmi`
+
+Miary dopasowania:
+
+* odchylenie standardowe reszt: Se = 6837
+* Współczynnik determinacji R^2=0.6504
+* R^2 skorygowany=0.6491 
+
+**Wniosek:**
+Model 3 wyjaśnia 65,04% kształtowania się kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+**Model liniowy 4 ze zmienną `children`**
+```{r}
+#h: koszty leczenia rozliczane przez ubezpieczenie zdrowotne w zależności od liczby osób na utrzymaniu beneficjenta palącego
+m4 <- lm(charges  ~ children, data = dane1)
+summary(m4)
+```
+
+* cahrges=31651.1+358.5*`children`
+
+Miary dopasowania:
+
+* odchylenie standardowe reszt: Se = 11560
+* Współczynnik determinacji R^2=0.001292
+* R^2 skorygowany=-0.00238 
+
+**Wniosek:**
+Model 4 wyjaśnia 0,13% kształtowania się kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+**Model liniowy 5 ze zmienną `region`**
+```{r}
+#h: koszty leczenia rozliczane przez ubezpieczenie zdrowotne w zależności od obszaru zamieszkania w USA beneficjenta palącego
+m5 <- lm(charges  ~ region, data = dane1)
+summary(m5)
+```
+
+* charges=29673.5 +518.5*`regionnorthwest`+5171.5*`regionsoutheast`+2595.5*`regionsouthwest`
+
+Miary dopasowania:
+
+* odchylenie standardowe reszt: Se = 11400
+* Współczynnik determinacji R^2=0.03554
+* R^2 skorygowany=0.02482 
+
+**Wniosek:**
+Model 5 wyjaśnia 3,55% kształtowania się kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+**Model liniowy m2 oraz m4 wyjaśniają bardzo mały procent kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne, natomiast modele m1, m5, a zwłaszcza m3 wyjaśniają w większym stopniu badane zjawisko**
+
+**Ponieważ modele 1 i 3 mają tylko jedną zmienną objaśniającą można pokazać je na wykresie**
+```{r}
+wykres1 <- ggplot() +
+  ggtitle("Wykres 1: Dopasowanie modelu liniowego 1 charges = b0+b1*age") +
+  geom_point(aes(dane1$age, dane1$charges)) +
+  geom_line(aes(m1$model$age, m1$fitted.values), color = "green3") +
+  xlab("wiek")+
+  ylab("kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne") +
+  theme_classic()
+
+wykres2 <- ggplot() +
+  ggtitle("Wykres 2: Dopasowanie modelu liniowego 3 charges = b0+b1*bmi") +
+  geom_point(aes(dane1$bmi, dane1$charges)) +
+  geom_line(aes(m3$model$bmi, m3$fitted.values), color = "green3") +
+  xlab("bmi")+
+  ylab("kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne") +
+  theme_classic()
+
+plot(wykres1)
+plot(wykres2)
+```
+
+**Wniosek:**
+Analizując powyższy wykres 1 można zauważyć, że dopasowaie modelu nie jest dobre. Jednostki zdecydowanie odstają od lini prostej. 
+Analizując wykres 2 można zauważyć, że jednostki są zdecydowanie bardziej zbliżone do lini prostej i dopasowanie modelu jest lepsze niż w przypadku modelu 1. Główną zmienną objaśniającą w budowaniu modelu kształtującego koszty leczenia rozliczane przez ubezpieczenie zdrowotne będzie zmienna `bmi`. 
+
+**W celu lepszego zbadania modelu 3 wykonano dla niego wykresy diagnostyczne**
+
+**Wykresy diagnostyczne modelu liniowego 3**
+```{r}
+plot(m3, which = 1:3)
+```
+
+**Wniosek:**
+Wariancja (rozrzut) reszt nie jest równomierne rozmieszczony wzdłuż linii poziomej, na poziomie=0. 
+Rozkład reszt nie jest normalny, można zauważyć obserwacje nietypowe o dużych resztach.
+Wartość średnia reszt jest bliska 0, co wskazuje właściwą postać funkcyjną modelu, choć występuje kilka jednostek odstających.
+
+**W testach statystycznych przyjmujemy poziom istotności alfa = 0.01**
+
+**Kolejno wykonano testy istotności dla parametrów modeli 1, 3 oraz 5**
+
+Interpretacja testów istotności parametrów **modelu 1** (test F i test t)
+
+**test F:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* F= 42.67
+* p-value: 3.181e-10
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**test t:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= 6.53
+* p-value: 3.18e-10
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**Wniosek:** Wiek statystycznie istotnie wpływa na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+Interpretacja testów istotności parametrów **modelu 3** (test F i test t)
+
+**test F:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* F= 506.1
+* p-value: 5.93e-10
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**test t:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= 22.50
+* p-value: <2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**Wniosek:** Bmi statystycznie istotnie wpływa na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+ Interpretacja testów istotności parametrów **modelu 5** (test F i test t)
+
+**test F:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* F= 3.316
+* p-value: 0.02046
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**test t:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= 21.311
+* p-value: <2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**Wniosek:**Region statystycznie istotnie wpływa na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+
+**Kolejno stworzono model liniowy 6 ze zmiennymi `age` i `bmi`**
+```{r}
+#h: koszty leczenia rozliczane przez ubezpieczenie zdrowotne w zależności od wieku i bmi beneficjenta palącego
+m6 <- lm(charges  ~ age + bmi , data = dane1)
+summary(m6)
+```
+
+**Wnioski**
+
+* charges=-22367.45.83+266.29*`age`+ 1438.09*`bmi`
+
+Miary dopasowania:
+
+* odchylenie standardowe reszt: Se=5754
+* Współczynnik determinacji R^2=0.7532
+* R^2 skorygowany=0.7514
+
+Model wyjaśnia 75,54% kształtowania się kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+Interpretacja testów istotności parametrów **modelu 6** (test F i test t)
+
+**test F:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* F= 413.6
+* p-value: < 2.2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**test t:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= -11.58
+* p-value: <2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**Wniosek:**Wszystkie parametry modelu istotnie różnią się od 0 na wszystkich poziomach istotności.
+
+
+**W celu lepszego zbadania modelu 6 wykonano dla niego wykresy diagnostyczne**
+
+**Wykresy diagnostyczne modelu liniowego 6 oraz obserwacja jednostek wpływowych**
+```{r}
+plot(m6, which = 1:5)
+```
+
+**Wniosek:**
+Wariancja (rozrzut) reszt nie jest równomierne rozmieszczony wzdłuż linii poziomej, na poziomie=0. 
+Rozkład reszt nie jest normalny, można zauważyć obserwacje nietypowe o dużych resztach.
+Wartość średnia reszt jest bliska 0, co wskazuje właściwą postać funkcyjną modelu, choć występuje kilka jednostek odstających.
+Za pomocą miar: odległość Cooka oraz wskaźnik wpływu leverage (dźwignia) dokonano oceny wpływu poszczególnych obserwacji na parametry strukturalne modelu 6, które zostały kolejno usunięte i zapisane jako `dane2`.
+
+**Usunięcie jednostek odstających z modelu 6**
+```{r}
+dane2<-dane1[-c(34,212,263,113,116,173,247,233,69,161,184,231,8,54,135,3,90,264,25,159,246,109,187,229,87,218,248),]
+```
+
+
+**Następnie wykonano testy statystyczne dla modelu 6**
+
+*Test normalności Shapiro-Wilka dla reszt modelu 6*
+```{r}
+shapiro.test(m6$residuals)
+```
+**Wniosek:**
+
+Ponieważ p-value < 0.01 to odrzucamy H0 na rzecz H1. Reszty modelu nie mają rozkładu normalnego.
+
+
+*Test Breuscha-Pagana jednorodności wariancji reszt modelu 6*
+```{r}
+bptest(m6)
+```
+**Wniosek:**
+
+Ponieważ p-value > 0.01 to nie ma podstaw do odrzucenia H0 o jednorodności wariancji reszt.
+
+
+*Test Durbina-Watsona niezależności reszt modelu 6*
+```{r}
+dwtest(m6, order.by = ~age, data = dane1)
+```
+**Wniosek:**
+
+Ponieważ p-value > 0.01 to nie ma podstaw do odrzucenia H0, mówiącej o niezależności reszt.
+
+
+*Test rainbow na liniowość modelu modelu 6*
+```{r}
+raintest(m6)
+```
+**Wniosek:**
+
+Ponieważ p-value > 0.01 to nie ma podstaw do odrzucenia H0, mówiącej o liniowości modelu.
+
+**Kolejno stworzono model liniowy 7, który jest modelem 6 po usunięciu jednostek odstających (ze zmiennymi `age` i `bmi`)**
+```{r}
+#h: koszty leczenia rozliczane przez ubezpieczenie zdrowotne w zależności od wieku i bmi beneficjenta palącego po wyeliminowaniu jednostek odsających
+m7 <- lm(charges  ~ age + bmi , data = dane2)
+summary(m7)
+```
+
+**Wnioski**
+
+* charges=-28320.58+242.90*`age`+ 1646.64*`bmi`
+
+
+**Interpretacja modelu 7**
+
+Wyraz wolny b0=-28320.58 w tym modelu nie ma interpretacji, ponieważ badanie nie obejmowało osób w wieku 0 lat (niemowlat).
+
+Współczynnik przy zmiennej "age" b1=242.90:
+
+* Jeżeli wiek beneficjenta palącego wzrośnie o 1 rok, to koszty leczenia rozliczane przez ubezpieczenie zdrowotne wzrosą średnio o 242.90 $ (ceteris paribus).
+* Jeżeli wiek beneficjenta palącego wzrośnie o 10 lat, to koszty leczenia rozliczane przez ubezpieczenie zdrowotne wzrosą średnio o 2429.0 $ (ceteris paribus).
+
+
+Współczynnik przy zmiennej "bmi" b2=1646.64:
+
+* Jeżeli bmi beneficjenta palącego wzrośnie o 1 jednostkę miary, to koszty leczenia rozliczane przez ubezpieczenie zdrowotne wzrosą średnio o 1646.64 $ (ceteris paribus).
+
+
+Miary dopasowania:
+
+* odchylenie standardowe reszt: Se=4374
+* Współczynnik determinacji R^2=0.8407
+* R^2 skorygowany=0.8394
+
+Model wyjaśnia 84,07% kształtowania się kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+ Interpretacja testów istotności parametrów **modelu 7** (test F i test t)
+
+**test F:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* F= 643.9
+* p-value: < 2.2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**test t:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= 643.9
+* p-value: <2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**Wniosek:**Wszystkie parametry modelu istotnie różnią się od 0 na wszystkich poziomach istotności.
+
+
+
+**Wykresy diagnostyczne modelu liniowego 7**
+```{r}
+plot(m7, which = 1:3)
+```
+**Wniosek:**
+Wariancja (rozrzut) reszt nie jest równomierne rozmieszczony wzdłuż linii poziomej, na poziomie=0. 
+Rozkład reszt nie jest normalny, można zauważyć obserwacje nietypowe o dużych resztach.
+Wartość średnia reszt jest bliska 0, co wskazuje właściwą postać funkcyjną modelu, choć występuje kilka jednostek odstających.
+
+**Testy statystyczne dla modelu 7**
+
+*Test normalności Shapiro-Wilka dla reszt modelu 7*
+```{r}
+shapiro.test(m7$residuals)
+```
+**Wniosek:**
+
+Ponieważ p-value < 0.01 to odrzucamy H0 na rzecz H1. Reszty modelu nie mają rozkładu normalnego.
+
+
+*Test Breuscha-Pagana jednorodności wariancji reszt modelu 7*
+```{r}
+bptest(m7)
+```
+**Wniosek:**
+
+Ponieważ p-value > 0.01 to nie ma podstaw do odrzucenia H0 o jednorodności wariancji reszt.
+
+
+*Test Durbina-Watsona niezależności reszt modelu 7*
+```{r}
+dwtest(m7, order.by = ~age, data = dane2)
+```
+**Wniosek:**
+
+Ponieważ p-value > 0.01 to nie ma podstaw do odrzucenia H0, mówiącej o niezależności reszt.
+
+
+*Test rainbow na liniowość modelu modelu 7*
+```{r}
+raintest(m7)
+```
+**Wniosek:**
+
+Ponieważ p-value > 0.01 to nie ma podstaw do odrzucenia H0, mówiącej o liniowości modelu.
+
+
+**Kolejno stworzono model liniowy 8, który jest modelem 6 (ze zmiennymi `age` i `bmi`) oraz z dodatkową zmienną `region`**
+```{r}
+#h: koszty leczenia rozliczane przez ubezpieczenie zdrowotne w zależności od wieku, bmi i regionu zamieszania beneficjenta palącego
+m8 <- lm(charges  ~ age + bmi + region , data = dane1)
+summary(m8)
+```
+
+**Wnioski**
+
+* charges=-22627.67+268.83*`age`+ 1471.07*`bmi`-620.40*`regionnorthwest`-1897.24*`regionsoutheast`-419.77*`regionsouthwest`
+
+Miary dopasowania:
+
+* odchylenie standardowe reszt: Se=5738
+* Współczynnik determinacji R^2=0.7574
+* R^2 skorygowany=0.7528
+
+Model wyjaśnia 75,74% kształtowania się kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne. Zmienna `region` samodzielnie wyjaśniała zaledwie 3,55% natomiast w porównaniu z innymi zmiennymi nie wnosi dużo do modelu.
+
+
+Interpretacja testów istotności parametrów **modelu 8** (test F i test t)
+
+**test F:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* F= 167.3
+* p-value: < 2.2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**test t:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= -11.378
+* p-value: <2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**Wniosek:**Wszystkie parametry modelu istotnie różnią się od 0 na wszystkich poziomach istotności, poza parametrami dotyczącymi regionu gdzie tylko `regionsoutheast` jest istotny od 0 na poziomie isotności 0.01 i 0.05, a `regionnorthwest` i `regionsouthwest` są istotne na poziomie istotności 0.1 i 1.
+
+
+**Wykresy diagnostyczne modelu liniowego 8 oraz obserwacja jednostek wpływowych**
+```{r}
+plot(m8, which = 1:5)
+```
+**Wniosek:**
+Wariancja (rozrzut) reszt nie jest równomierne rozmieszczony wzdłuż linii poziomej, na poziomie=0. 
+Rozkład reszt nie jest normalny, można zauważyć obserwacje nietypowe o dużych resztach.
+Wartość średnia reszt jest bliska 0, co wskazuje właściwą postać funkcyjną modelu, choć występuje kilka jednostek odstających.
+Za pomocą miar: odległość Cooka oraz wskaźnik wpływu leverage (dźwignia) dokonano oceny wpływu poszczególnych obserwacji na parametry strukturalne modelu 8, które zostały kolejno usunięte i zapisane jako `dane3`.
+
+**Usunięcie jednostek odstających z modelu 8**
+```{r}
+dane3<-dane1[-c(34,212,263,247,173,116,161,117,231,8),]
+```
+
+
+**Testy statystyczne dla modelu 8**
+
+*Test normalności Shapiro-Wilka dla reszt modelu 8*
+```{r}
+shapiro.test(m8$residuals)
+```
+**Wniosek:**
+
+Ponieważ p-value < 0.01 to odrzucamy H0 na rzecz H1. Reszty modelu nie mają rozkładu normalnego.
+
+
+*Test Breuscha-Pagana jednorodności wariancji reszt modelu 8*
+```{r}
+bptest(m8)
+```
+**Wniosek:**
+
+Ponieważ p-value > 0.01 to nie ma podstaw do odrzucenia H0 o jednorodności wariancji reszt.
+
+
+*Test Durbina-Watsona niezależności reszt modelu 8*
+```{r}
+dwtest(m8, order.by = ~age, data = dane1)
+```
+**Wniosek:;**
+
+Ponieważ p-value > 0.01 to nie ma podstaw do odrzucenia H0, mówiącej o niezależności reszt.
+
+
+*Test rainbow na liniowość modelu modelu 8*
+```{r}
+raintest(m8)
+```
+**Wniosek:**
+
+Ponieważ p-value > 0.01 to nie ma podstaw do odrzucenia H0, mówiącej o liniowości modelu.
+
+**Kolejno stworzono model liniowy 9, który jest modelem 8 po usunięciu jednostek odstających (ze zmiennymi `age`, `bmi` i `region`)**
+```{r}
+#h: koszty leczenia rozliczane przez ubezpieczenie zdrowotne w zależności od wieku, bmi i regionu zamieszkania beneficjenta palącego po wyeliminowaniu jednostek odstających
+m9 <- lm(charges  ~ age + bmi +region , data = dane3)
+summary(m9)
+```
+
+**Wnioski**
+
+* charges=-23562.68+261.28*`age`+ 1505.19*`bmi`-1689.41*`regionnorthwest`-1965.034*`regionsoutheast`-505.08*`regionsouthwest`
+
+**Interpretacja modelu 9**
+
+Wyraz wolny b0=-23562.68 w tym modelu nie ma interpretacji, ponieważ badanie nie obejmowało osób w wieku 0 lat (niemowlat).
+
+Współczynnik przy zmiennej "age" b1=261.28:
+
+* Jeżeli wiek beneficjenta palącego wzrośnie o 1 rok, to koszty leczenia rozliczane przez ubezpieczenie zdrowotne wzrosą średnio o 261.28 $ (ceteris paribus).
+* Jeżeli wiek beneficjenta palącego wzrośnie o 10 lat, to koszty leczenia rozliczane przez ubezpieczenie zdrowotne wzrosą średnio o 2612.8 $ (ceteris paribus).
+
+
+Współczynnik przy zmiennej "bmi" b2=1505.19:
+
+* Jeżeli bmi beneficjenta palącego wzrośnie o 1 jednostkę miary, to koszty leczenia rozliczane przez ubezpieczenie zdrowotne wzrosą średnio o 1505.19 $ (ceteris paribus).
+
+Współczynnik przy zmiennej "regionnorthwest" b3=-1689.41:
+
+* Beneficjenci palący mieszkający w rejonie northwest mają koszty leczenia rozliczane przez ubezpieczenie zdrowotne niższse średnio o 1689.41 $ (ceteris paribus) w stosunku do tych zamieszkujących region northeast.
+
+Współczynnik przy zmiennej "regionsoutheast" b4=-1965.03:
+
+* Beneficjenci palący mieszkający w rejonie southeast mają koszty leczenia rozliczane przez ubezpieczenie zdrowotne niższse średnio o 1965.03 $ (ceteris paribus) w stosunku do tych zamieszkujących region northeast.
+
+Współczynnik przy zmiennej "regionsoutheast" b5=-505.08:
+
+* Beneficjenci palący mieszkający w rejonie southeast mają koszty leczenia rozliczane przez ubezpieczenie zdrowotne niższse średnio o 505.08 $ (ceteris paribus) w stosunku do tych zamieszkujących region northeast.
+
+
+Miary dopasowania:
+
+* odchylenie standardowe reszt: Se=4661
+* Współczynnik determinacji R^2=0.8248
+* R^2 skorygowany=0.8214 
+
+Model wyjaśnia 82,48% kształtowania się kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+ Interpretacja testów istotności parametrów **modelu 9** (test F i test t)
+
+**test F:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* F= 243
+* p-value: < 2.2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**test t:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= -14.150
+* p-value: <2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**Wniosek:**Wszystkie parametry modelu istotnie różnią się od 0 na wszystkich poziomach istotności, poza parametrami dotyczącymi regionu gdzie`regionsoutheast` i `regionnorthwest` są istotne od 0 na poziomie isotności 0.01 i 0.05, a`regionsouthwest` jest istoty na poziomie istotności 0.1 i 1.
+
+
+**Wykresy diagnostyczne modelu liniowego 9**
+```{r}
+plot(m9, which = 1:3)
+```
+**Wniosek:**
+Wariancja (rozrzut) reszt nie jest równomierne rozmieszczony wzdłuż linii poziomej, na poziomie=0. 
+Rozkład reszt jest normalny.
+Wartość średnia reszt jest bliska 0, co wskazuje właściwą postać funkcyjną modelu, choć występuje kilka jednostek odstających.
+
+**Testy statystyczne dla modelu 9**
+
+*Test normalności Shapiro-Wilka dla reszt modelu 9*
+```{r}
+shapiro.test(m9$residuals)
+```
+**Wniosek:**
+
+Ponieważ p-value > 0.01 to nie ma podstaw do odrzucenia H0 na rzecz H1. Reszty modelu mają rozkład normalny.
+
+
+*Test Breuscha-Pagana jednorodności wariancji reszt modelu 9*
+```{r}
+bptest(m9)
+```
+**Wniosek:**
+
+Ponieważ p-value > 0.01 to nie ma podstaw do odrzucenia H0 o jednorodności wariancji reszt.
+
+
+*Test Durbina-Watsona niezależności reszt modelu 9*
+```{r}
+dwtest(m9, order.by = ~age, data = dane3)
+```
+**Wniosek:**
+
+Ponieważ p-value > 0.01 to nie ma podstaw do odrzucenia H0, mówiącej o niezależności reszt.
+
+
+*Test rainbow na liniowość modelu modelu 9*
+```{r}
+raintest(m9)
+```
+**Wniosek:**
+
+Ponieważ p-value > 0.01 to nie ma podstaw do odrzucenia H0, mówiącej o liniowości modelu.
+
+
+**Sprawdzenie założeń modelów linowych 7 i 9**
+Sprawdzenie, czy zmienne objaśniające nie są współliniowe. Miara współliniowości zmiennych objaśniających VIF - czynnik rozdęcia wariancji.
+```{r}
+vif(m7)
+cat("\n")
+vif(m9)
+```
+
+**Wniosek:**
+Ponieważ wszystkie wartości czynnika vif w obu modelach mają niskie wartości tzn. nie przekraczają wartości= 5.0, nie ma podejrzeń, że zmienne objaśniające są współliniowe.
+
+
+**Podsumowanie:**
+
+W `modelu 7` reszty nie mają rozkładu normalnego, spełniają reszte założeń statystycznych modelu i wyjaśniają 84,07% kształtowania kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne. Po dodaniu zmiennej '`region` dopasowanie `modelu 9` się poprawiło - reszty modelu mają rozkład normalny, a co za tym idzie model spełnia wszystkie założenia statystyczne, ale lekko zwiększyło się odchylenie standardowe reszt. `Model 9` wyjaśnia w 82,48%. Pomimo, że zmienna `region` nie wnosi dużo do modelu to poprawiła wyniki testów statystycznych. Można jednak poszkać lepszych postaci modelu.
+
+#######################################################################################################################################################
+
+
+**2) Estymacja, a kolejno weryfikacja otrzymanego modelu klasy glm, objaśniającego koszty leczenia rozliczane przez ubezpieczenie zdrowotne danej osoby PALĄCEJ.**
+
+**Wbór postaci modelu GLM dla zmiennej Y=charges**
+
+Estymujemy modele dla zmiennej Y o rozkładzie normalnym `family = gaussian` z różnymi funkcjami wiążącymi.
+
+**Funkcja wiążąca identycznościowa**
+
+Estymacja **modelu 9** GLM z funkcją wiążącą identycznościową (model liniowy) - estymacja metodą MNW.
+
+W poniższej formule wartość domyślna argumentu `link = identity` 
+
+
+
+**PALĄCY MODEL 9 Z LINOWYCH -> ZE ZMIENNA REGION**
+
+```{r}
+dane3<-dane1[-c(34,212,263,247,173,116,161,117,231,8),]
+```
+
+
+```{r}
+#h: koszty leczenia rozliczane przez ubezpieczenie zdrowotne w zależności od wieku, bmi i regionu zamieszkania beneficjenta palącego po wyeliminowaniu jednostek odstających
+m10 <- glm(charges  ~ age + bmi +region , data = dane3, family = gaussian)
+summary(m10)
+```
+
+Mininalną wartością tego modelu jest -9917.6, a największą 13559.3. Wartość środkowa wynosi 159.7.
+Kwartyl pierwszy 25% obserwacji położonych jest poniżej -3943.1, a 75% obserwacji jest położonych powyżej tej wartości.
+Kwartyl trzeci 75% obserewacji położonych jest poniżej 3402.5, a 25% obserwacji położonych jest powyżej tej wartości.
+
+**test t dla wyrazu wolnego :**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= -14.150
+* alfa = 0.01
+* p-value: <2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+
+**test t dla zmiennej age:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= 12.636
+* alfa = 0.01
+* p-value: <2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**Wniosek:** Wiek statystycznie istotnie wpływa na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+ 
+**test t dla zmiennej bmi:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= 30.426
+* alfa = 0.01
+* p-value: <2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**Wniosek:** BMI statystycznie istotnie wpływa na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+ 
+**test t dla zmiennej regionnorthwest:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= -1.973
+* alfa = 0.01
+* p-value: 0.0496
+* Wniosek: Brak podstaw do odrzucenia H0
+
+**Wniosek:** Region northwest statystycznie istotnie nie wpływa na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+ 
+**test t dla zmiennej southeast:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= -2.490
+* alfa = 0.01
+* p-value: 0.0134
+* Wniosek: Brak podstaw do odrzucenia H0
+
+**Wniosek:** Region southeast statystycznie istotnie nie wpływa na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+**test t dla zmiennej southwest:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= -0.587
+* alfa = 0.01
+* p-value: 0.5574
+* Wniosek: Brak podstaw do odrzucenia H0
+
+**Wniosek:** Region southwest statystycznie istotnie niewpływa na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+
+#AIC - kryterium informacyjne Akaike -> ma byc jak najmniejsze 
+
+Kryterium Akaike dla tego modelu wynosi 5217.2
+
+
+**Wnioski**
+
+**Model 10**
+* chrages=-23562.68+261.28 * `age` + 1505.19 * `bmi`-1689.41* `regionnorthwest`- 1965.03 * `regionsoutheast` - 505.08 * `regionsouthwest`
+
+Ponieważ p-value < alfa = 0.01, to odrzucamy HO na korzyść HA.
+Na podstawie testu Walda możemy stwierdzić, że zarówno wiek, bmi oraz region zamieszkania osób palących istotnie wpływają na wysokość składki ubezpieczeniowej.
+
+Dodatkowo wykonamy test istotności wszystkich zmiennych niezależnych w modelu. Można wykonać test ilorazu wiarygodności lub test Walda.Przy czym testami lokalnymi wykonuje się test globalny - najpierw testujemy wszystkie parametry=0, jeśli nie to dopiero robimy testy lokalne.
+
+```{r}
+lrtest(m10)
+waldtest(m10)
+```
+**Wnioski**
+
+W teście ilorazu wiarygodności p-value < 0.01, zatem należy odrzucić H0 na korzyść HA.
+W teście Walda p-value < 0.01, zatem należy odrzucić H0 na korzyść HA.
+
+Odrzucamy hipotezę H0 mówiącą o tym, że parametry przy zmiennych są równe 0 na rzecz HA, mówiącej o tym, że istnieje parametr istotnie różny od 0.Test ten powinien zostać wykonany na początku.
+
+Istnieje parametr beta statystycznie istotny różny od 0, czyli jest zmienna która ma wplyw na wysokość składki ubezpieczeniowej.Ten test powinien poprzedzać testy dla poszczególnych parametrów.
+
+```{r}
+dane4<-dane1[-c(34,212,263,247,173,116,161,117,231,8,10,69,113,43,174,183),]
+```
+
+
+###Funkcja wiążąca logarytmiczna
+Estymacja **modelu 11** GLM z funkcją wiążącą logarytmiczną (model log normalny)
+```{r}
+m11 <- glm(charges  ~ age + bmi +region , data = dane4, family = gaussian(link = "log"))
+summary(m11) 
+```
+Mininalną wartością tego modelu jest -9437, a największą 13897. Wartość środkowa wynosi -809.
+Kwartyl pierwszy 25% obserwacji położonych jest poniżej -4199, a 75% obserwacji jest położonych powyżej tej wartości.
+Kwartyl trzeci  75% obserewacji położonych jest poniżej 3752, a 25% obserwacji położonych jest powyżej tej wartości.
+
+**test t dla wyrazu wolnego :**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= 135.069
+* alfa = 0.01
+* p-value: <2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+
+**test t dla zmiennej age:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= 11.648
+* alfa = 0.01
+* p-value: <2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**Wniosek:** Wiek statystycznie istotnie wpływa na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+ 
+**test t dla zmiennej bmi:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= 25.886
+* alfa = 0.01
+* p-value: <2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**Wniosek:** BMI statystycznie istotnie wpływa na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+ 
+**test t dla zmiennej regionnorthwest:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= -0.695 
+* alfa = 0.01
+* p-value:0.488
+* Wniosek: Brak podstaw do odrzucenia H0
+
+**Wniosek:** Region northwest statystycznie istotnie nie wpływa na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+ 
+**test t dla zmiennej southeast:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= -2.361
+* alfa = 0.01
+* p-value: 0.019
+* Wniosek: Brak podstaw do odrzucenia H0
+
+**Wniosek:** Region southeast statystycznie istotnie nie wpływa na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+**test t dla zmiennej southwestt:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= 0.671
+* alfa = 0.01
+* p-value: 0.503
+* Wniosek: Brak podstaw do odrzucenia H0
+
+**Wniosek:** Region southwest statystycznie istotnie nie wpływa na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+
+#AIC - kryterium informacyjne Akaike -> ma byc jak najmniejsze 
+
+Kryterium Akaike dla tego modelu wynosi 5139.4
+
+**Model 11**
+g(u)=ln u -> model log normalny family=gaussian(link="log")
+
+Postać modelu: ln(charges)=8.6508756 + 0.0080495 * `age` + 0.0450499 * `bmi`- 0.0213275 * `regionnorthwest`- 0.0631668 * `regionsoutheast` + 0.0198589 * `regionsouthwest`
+
+Testy istotności:
+
+```{r}
+lrtest(m11)
+waldtest(m11)
+```
+**Wnioski**
+
+W teście ilorazu wiarygodności p-value < 0.01, zatem należy odrzucić H0 na korzyść HA.
+W teście Walda p-value < 0.01, zatem należy odrzucić H0 na korzyść HA.
+
+Odrzucamy hipotezę H0 mówiącą o tym, że parametry przy zmiennych są równe 0 na rzecz HA, mówiącej o tym, że istnieje parametr istotnie różny od 0.Test ten powinien zostać wykonany na początku.
+
+Istnieje parametr beta statystycznie istotny różny od 0, czyli jest zmienna która ma wplyw na wysokość składki ubezpieczeniowej.Ten test powinien poprzedzać testy dla poszczególnych parametrów.
+
+```{r}
+dane5<-dane1[-c(34,212,263,247,173,116,161,117,231,8,111,10,113,67,44,110,43,174,183),]
+```
+
+
+###Funkcja wiążąca odwrotna
+Estymacja **modelu 12** GLM z funkcją wiążącą odwrotną
+```{r}
+m12 <- glm(charges  ~ age + bmi +region , data = dane5, family = gaussian(link = "inverse"))
+summary(m12) 
+```
+Mininalną wartością tego modelu jest -11149, a największą 13285. Wartość środkowa wynosi -1545.
+Kwartyl pierwszy 25% obserwacji położonych jest poniżej -5342, a 75% obserwacji jest położonych powyżej tej wartości.
+Kwartyl trzeci 75% obserewacji położonych jest poniżej 5013, a 25% obserwacji położonych jest powyżej tej wartości.
+
+**test t dla wyrazu wolnego :**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= 33.055
+* alfa = 0.01
+* p-value: <2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+
+**test t dla zmiennej age:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= -10.991
+* alfa = 0.01
+* p-value: <2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**Wniosek:** Wiek statystycznie istotnie wpływa na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+ 
+**test t dla zmiennej bmi:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= -20.183
+* alfa = 0.01
+* p-value: <2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**Wniosek:** BMI statystycznie istotnie wpływa na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+ 
+**test t dla zmiennej regionnorthwest:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= 0.648
+* alfa = 0.01
+* p-value: 0.518
+* Wniosek: Brak podstaw do odrzucenia H0
+
+**Wniosek:** Region northwest statystycznie istotnie nie wpływa na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+ 
+**test t dla zmiennej southeast:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= 2.798
+* alfa = 0.01
+* p-value: 0.00555
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**Wniosek:** Region southeast statystycznie istotnie wpływa na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+**test t dla zmiennej southwestt:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= -1.227
+* alfa = 0.01
+* p-value: 0.22095
+* Wniosek: Brak podstaw do odrzucenia H0.
+
+**Wniosek:** Region southwest statystycznie istotnie nie wpływa na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+
+#AIC - kryterium informacyjne Akaike -> ma byc jak najmniejsze 
+
+Kryterium Akaike dla tego modelu wynosi 5139.4
+
+
+**Model 12**
+
+g(u)= 1/u family=gaussian (link = "inverse")
+
+**Postać modelu 12:**
+
+1/charges = 0.00008016 - 2.461e-07 * `age` - 1.235e-06 * `bmi`+ 6.594e-07 * `regionnorthwest`+ 2.436e-06 * `regionsoutheast` -1.197e-06 * `regionsouthwest`
+
+
+Testy istotności:
+
+```{r}
+lrtest(m12)
+waldtest(m12)
+```
+**Wnioski**
+
+W teście ilorazu wiarygodności p-value < 0.01, zatem należy odrzucić H0 na korzyść HA.
+W teście Walda p-value < 0.01, zatem należy odrzucić H0 na korzyść HA.
+
+Odrzucamy hipotezę H0 mówiącą o tym, że parametry przy zmiennych są równe 0 na rzecz HA, mówiącej o tym, że istnieje parametr istotnie różny od 0.Test ten powinien zostać wykonany na początku.
+
+Istnieje parametr beta statystycznie istotny różny od 0, czyli jest zmienna która ma wplyw na wysokość składki ubezpieczeniowej.Ten test powinien poprzedzać testy dla poszczególnych parametrów.
+
+
+###Wykresy diagnostyczne modele 10-12
+####Wykresy reszt vs wartości przewidywane
+
+```{r}
+plot(m10, which = 1)
+plot(m11, which = 1)
+plot(m12, which = 1)
+```
+**Wnioski**
+
+Na wykresach są zaznaczone 3 największe reszty, ale one niewiele odstają od pozostałych.
+
+Oś pozioma - Wartosci prognozowane
+Oś pionowa - Reszty
+
+
+###Identyfikacja obserwacji wpływowych na wykresach (które wpływają w dużym stopniu na oszacowanie parametrów strukturalnych)
+```{r}
+plot(m10, which = 4)
+plot(m11, which = 4)
+plot(m12, which = 4)
+plot(m10, which = 5)
+plot(m11, which = 5)
+plot(m12, which = 5)
+```
+Odległość Cooka jest liczona dla każdej obserwacji (3 największe oznaczone)
+Oceniając model możemy wyróżnić obserwacje o dużych resztach (te odstające), jak i wpływowe (wpływowe nie zawsze są tymi odstającymi - one mają duży wpływ na oszacowanie parametrów strukturalnych)
+
+Odległość Cooka jest liczona dla każdej obserwacji - liczony jest model na podstawie całego zbioru danych i bez tej obserwacji i budowana miara na podstawie jak zmieniły się te współczynniki beta. Jak jest zbyt duża to jest inny rząd wielkosći to nie ma wątpliwości, że jest wpływowa. Stawiamyu umowne granice. -> wykresy 4
+
+Wykresy 11 -> odległość Cooka i wskaźnik wpływu dla każdej zmiennej objaśniającej z osobna, mierzony dla poszczególnych obserwacji odstępstw o zmiennej objaśniającej xi od jej średniego poziomu. 
+
+Obserwacje, które są nietypowe mogą być: bo mają dużą resztę, bo x odbiegają, bo wpływ na wskaźniki beta.
+
+Tutaj ta linia Cooka jest poza naszymi zmiennymi.
+
+###Outliers Test
+Wykrycie obserwacji nietypowych za pomocą testu statystycznego
+
+**Bonferroni Outlier Test**
+
+Funkcja OutlierTest - powie nam dla każdej obserwacji czy ona jest wpływowa czy nie 
+
+argument n.max - liczba podawanych obserwacji nietypowych jest nie większa niż n.max
+
+```{r}
+outlierTest(m10, n.max = Inf)
+outlierTest(m11, n.max = Inf)
+outlierTest(m12, n.max = Inf)
+```
+**Wnioski**
+
+Ponieważ p-vaule > 0.01 to odrzucamy H0 dla modelu 12.
+Ponieważ p-vaule < 0.01 to nie ma podstaw do odrzucenia H0 dla modeli 10 i 11.
+Test Bonferroni Outlier nie wykazał obecności obserwacji nietypowych w analizowanych trzech modelach.
+(test został wykonał dla trzech modeli)
+
+###Porównanie modeli 10-12
+
+Ocena dopasowania modeli GLM: statystyka odchylenia (`deviance`), kryterium informacyjne (AIC), miary pseudo-R2.
+
+W przypadku `family = gaussian` statystyka odchylenia = suma kwadratów reszt, zatem odchylenie standardowe reszt (średni błąd szacunku) = (deviance/df)^0.5
+
+Zdefiniowana została funkcja `ocena_modelu_GLM` licząca powyższe miary. Argumentem tej funkcji jest obiekt klasy glm.
+```{r}
+ocena_modelu_GLM <- function(model) {
+  odch_std_reszt <- (model$deviance/model$df.residual)^0.5
+  kryterium_AIC <- c(model$aic)
+  McFadden<-pR2(model)[4]
+  Cragg_Uhler<-pR2(model)[6]
+  ocena <- data.frame(odch_std_reszt, kryterium_AIC, McFadden, Cragg_Uhler)
+  return(ocena)
+}
+ocena_modeli <- rbind(model_10=ocena_modelu_GLM(m10), model_11=ocena_modelu_GLM(m11), model_12=ocena_modelu_GLM(m12))
+ocena_modeli
+```
+Miary pseudo R^2 zbudowane na bazie wiarygodności modelu w prównaniu do wiarygodności modelu 0 (tylko z wyrazem wolnym).
+R^2 jaki procent zmienności Y jest wyjaśniany poprzez zmienność zmiennych objaśniających. Tutaj nie ma takiej interpretacji, dlatego jest nazwa pseudo R^2 żeby ni interpretować jako R^2 w modelu liniowym.
+Miary pseudo R^2 zwykle w dolnych obszarach się znajdują.
+
+Na bazie statystyki odchylenia mamy kryteria informacyjne.
+
+Dla rozkładu normalnego statystyka ochylenia jest równa sumie kwadratów reszt.
+
+Wiarygodność - prawdop. łącznego dostania się do próby tych zaobserwowanych przez nas wartości przy założeniu, że model działa.
+Maksymalizujemy wiarygodność poszukując parametru beta - czyli żeby zaobserwowane prawdopo. wartości w próbie było jak największe. To jest łączne prawdop. dostania się do próby tych obserwacji, KTÓRE JUŻ MAMY. To jest liczba z przedziału 0-1, a my logarytmujemy dlatego wychodzi ujemne. 
+Logarytmy wiarygodnosći reszt ujemne.
+
+**Wnioski**
+
+Najlepiej dopasowany jest model 11, ponieważ ma najniższe kryterium AIC, niewysokie odchylenie standarodowe reszt, a dosyć wysokie kryterium McFaddena i Cragg_Uhlera.
+
+**Interpretacja modelu nr 11**
+
+```{r}
+m11$coefficients
+
+cat("\n\nexp(bi)\n")
+exp(m11$coefficients)
+
+
+```
+**Wnioski**
+
+Postać modelu 11 można zapisać także jako:
+
+** charges = exp(5715.15 - 1.0080820 * `age` + 1.0460800 * `bmi`+ 0.9788983 * `regionnorthwest`+ 0.9387869 * `regionsoutheast` + 1.0200574 * `regionsouthwest`)**
+
+
+Parametry modelu log normalnego posiadają interpretację:
+
+wyraz wolny b0 --> exp(b0) w tym modelu nie ma interpretacji, ponieważ badanie nie obejmowało osob w wieku 0 lat (niemowlat)
+
+b1= 0.008049477 --> exp(b1)=1.0080820 --> (exp(b1)-1)*100%
+
+age b1 - Jeżeli wiek wzrosnie o jeden rok a pozostałe zmienne nie ulegną zmianie to wysokość składki dla osób palących wzrośnie średnio o 0.81% dla osób z tym samym bmi i mieszających w tym samym regionie cp.
+
+bmi b2=0.045049862 --> exp(b2)=1.0460800
+
+Jeżeli bmi wzrosnie o jedną jednostkę a pozostałe zmienne nie ulegną zmianie to wysokość składki dla osób palących wzrośnie średnio o 4.6% dla osób w tym samym wieku i mieszających w tym samym regionie cp.
+
+
+region northwest b3=-0.021327548 --> exp(b3)=0.9788983
+
+Benficjęci zamieszukący w regionie northwest mają średnio o 2,11% niższe koszty naliczanie przez ubezpieczalnie zdrowotne, cp.
+
+
+region southeast b4=-0.063166802 --> exp(b4)=-6,31%
+
+Benficjęci zamieszukący w regionie southeast mają średnio o 6,31 % niższe koszty naliczanie przez ubezpieczalnie zdrowotne, cp.
+
+region southwest b5=-0.019858875  --> exp(b5)=2%
+
+Benficjęci zamieszukący w regionie southwes mają średnio o 2 % wyższe koszty naliczanie przez ubezpieczalnie zdrowotne, cp.
+
+
+**PALĄCY MODEL 7 Z LINOWYCH -> BEZ ZMIENNEJ REGION**
+
+
+```{r}
+dane6<-dane1[-c(34,212,263,247,173,116,161,117,231,8),]
+```
+
+
+```{r}
+#h: koszty leczenia rozliczane przez ubezpieczenie zdrowotne w zależności od wieku, bmi i regionu zamieszkania beneficjenta palącego po wyeliminowaniu jednostek odstających
+m13 <- glm(charges  ~ age + bmi , data = dane6, family = gaussian)
+summary(m13)
+```
+Mininalną wartością tego modelu jest -9767.8, a największą 13.329. Wartość środkowa wynosi 78.9.
+Kwartyl pierwszy 25% obserwacji położonych jest poniżej -3686.5, a 75% obserwacji jest położonych powyżej tej wartości.
+Kwartyl trzeci 75% obserewacji położonych jest poniżej 3567.9, a 25% obserwacji położonych jest powyżej tej wartości.
+**test t dla wyrazu wolnego :**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= -14.53
+* alfa = 0.01
+* p-value: <2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+
+**test t dla zmiennej age:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= 12.41
+* alfa = 0.01
+* p-value: <2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**Wniosek:** Wiek statystycznie istotnie wpływa na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+ 
+**test t dla zmiennej bmi:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= 31.00
+* alfa = 0.01
+* p-value: <2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**Wniosek:** BMI statystycznie istotnie wpływa na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+
+#AIC - kryterium informacyjne Akaike -> ma byc jak najmniejsze 
+
+Kryterium Akaike dla tego modelu wynosi 5219.3
+
+
+**Wnioski**
+
+**Model 13**
+* chrages=-23658.73+257.72 * `age` + 1476.35 * `bmi`
+
+Ponieważ p-value < alfa = 0.01, to odrzucamy HO na korzyść HA.
+Na podstawie testu Walda możemy stweirdzić, że zarówno wiek oraz bmi osób palących istotnie wpływają na wysokość składki ubezpieczeniowej.
+
+Dodatkowo wykonamy test istotności wszystkich zmiennych niezależnych w modelu. Można wykonać test ilorazu wiarygodności lub test Walda.Przy czym testami lokalnymi wykonuje się test globalny - najpierw testujemy wszystkie parametry=0, jeśli nie to dopiero robimy testy lokalne.
+
+```{r}
+lrtest(m13)
+waldtest(m13)
+```
+**Wnioski**
+
+W teście ilorazu wiarygodności p-value < 0.01, zatem należy odrzucić H0 na korzyść HA.
+W teście Walda p-value < 0.01, zatem należy odrzucić H0 na korzyść HA.
+
+Odrzucamy hipotezę H0 mówiącą o tym, że parametry przy zmiennych są równe 0 na rzecz HA, mówiącej o tym, że istnieje parametr istotnie różny od 0.Test ten powinien zostać wykonany na początku.
+
+Istnieje parametr beta statystycznie istotny różny od 0, czyli jest zmienna która ma wplyw na wysokość składki ubezpieczeniowej.Ten test powinien poprzedzać testy dla poszczególnych parametrów.
+
+
+
+```{r}
+dane7<-dane1[-c(34,212,263,247,173,116,161,117,231,8,111,69,113),]
+```
+
+
+###Funkcja wiążąca logarytmiczna
+Estymacja **modelu 14** GLM z funkcją wiążącą logarytmiczną (model log normalny)
+```{r}
+m14 <- glm(charges  ~ age + bmi, data = dane7, family = gaussian(link = "log"))
+summary(m14) 
+```
+Mininalną wartością tego modelu jest -10475, a najawiększą 12739. Wartość środkowa wynosi -952.7.
+Kwartyl pierwszy 25% obserwacji położonych jest poniżej -4230.7 , a 75% obserwacji jest położonych powyżej tej wartości.
+Kwartyl trzeci  75% obserewacji położonych jest poniżej 4203.3 , a 25% obserwacji położonych jest powyżej tej wartości.
+
+**test t dla wyrazu wolnego :**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= 139.18
+* alfa = 0.01
+* p-value: <2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+
+**test t dla zmiennej age:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= 11.39
+* alfa = 0.01
+* p-value: <2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**Wniosek:** Wiek statystycznie istotnie wpływa na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+ 
+**test t dla zmiennej bmi:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t=  26.12
+* alfa = 0.01
+* p-value: <2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**Wniosek:** BMI statystycznie istotnie wpływa na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+
+#AIC - kryterium informacyjne Akaike -> ma byc jak najmniejsze 
+
+Kryterium Akaike dla tego modelu wynosi 5201.2
+
+**Model 14**
+g(u)=ln u -> model log normalny family=gaussian(link="log")
+
+Postać modelu: ln(charges)= 7.943585 + 0.030509 * `age` - 0.005917 * `bmi`
+
+Testy istotności:
+
+```{r}
+lrtest(m14)
+waldtest(m14)
+```
+**Wnioski**
+
+W teście ilorazu wiarygodności p-value < 0.01, zatem należy odrzucić H0 na korzyść HA.
+W teście Walda p-value < 0.01, zatem należy odrzucić H0 na korzyść HA.
+
+Odrzucamy hipotezę H0 mówiącą o tym, że parametry przy zmiennych są równe 0 na rzecz HA, mówiącej o tym, że istnieje parametr istotnie różny od 0.Test ten powinien zostać wykonany na początku.
+
+Istnieje parametr beta statystycznie istotny różny od 0, czyli jest zmienna która ma wplyw na wysokość składki ubezpieczeniowej.Ten test powinien poprzedzać testy dla poszczególnych parametrów.
+
+
+```{r}
+dane8<-dane1[-c(34,212,263,247,173,116,161,117,231,8,111,110,113),]
+```
+
+
+###Funkcja wiążąca odwrotna
+Estymacja **modelu 15** GLM z funkcją wiążącą odwrotną
+```{r}
+m15 <- glm(charges  ~ age + bmi , data = dane8, family = gaussian(link = "inverse"))
+summary(m15) 
+```
+
+Mininalną wartością tego modelu jest -12051, a najawiększą 11755. Wartość srodkowa wynosi -1826.
+Kwartyl pierwszy- 25% obserwacji położonych jest poniżej -5538 , a 75% obserwacji jest położonych powyżej tej wartości.
+Kwartyl trzeci - 75% obserewacji położonych jest poniżej 5432 , a 25% obserwacji położonych jest powyżej tej wartości.
+**test t dla wyrazu wolnego :**
+
+* H0= Beta i=0
+* H1= Beta 35.36
+* alfa = 0.01
+* p-value: <2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+
+**test t dla zmiennej age:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= -10.21
+* alfa = 0.01
+* p-value: <2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**Wniosek:** Wiek statystycznie istotnie wpływa na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+ 
+**test t dla zmiennej bmi:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= -20.94
+* alfa = 0.01
+* p-value: 0.276
+* Wniosek: Brak podstaw do odrzucenia H0
+
+**Wniosek:** BMI statystycznie istotnie nie wpływa na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+
+#AIC - kryterium informacyjne Akaike -> ma byc jak najmniejsze 
+
+Kryterium Akaike dla tego modelu wynosi 5276.4
+**Model 15**
+
+g(u)= 1/u family=gaussian (link = "inverse")
+
+**Postać modelu 15:**
+
+1/charges = 7.653e-05 - 2.257e-07 * `age` - 1.124e-06 * `bmi`
+
+Testy istotności:
+```{r}
+lrtest(m15)
+waldtest(m15)
+```
+**Wnioski**
+
+W teście ilorazu wiarygodności p-value < 0.01, zatem należy odrzucić H0 na korzyść HA.
+W teście Walda p-value < 0.01, zatem należy odrzucić H0 na korzyść HA.
+
+Odrzucamy hipotezę H0 mówiącą o tym, że parametry przy zmiennych są równe 0 na rzecz HA, mówiącej o tym, że istnieje parametr istotnie różny od 0.Test ten powinien zostać wykonany na początku.
+
+###Wykresy diagnostyczne modele 13-15
+####Wykresy reszt vs wartości przewidywane
+Czy te resty rozkładają się wzdłuż lini przerywanej (średnia wartość reszt - krzywa wygładzona)
+czy reszty rosna wraz ze wzrostem wartości prognozowanej? Czy ten rozrzut jest losowy?
+Sprawdzenie, czy średnia reszt jest bliska 0, czy rozrzut reszt nie zależy od y  oraz czy nie ma obserwacji nietypowych o dużych resztach.
+```{r}
+plot(m13, which = 1)
+plot(m14, which = 1)
+plot(m15, which = 1)
+```
+**Wnioski**
+
+Na wykresach są zaznaczone 3 największe reszty, ale one niewiele odstają od pozostałych.
+
+Oś pozioma - Wartosci prognozowane
+Oś pionowa - Reszty
+
+####Identyfikacja obserwacji wpływowych na wykresach (które wpływają w dużym stopniu na oszacowanie parametrów strukturalnych)
+```{r}
+plot(m13, which = 4)
+plot(m14, which = 4)
+plot(m15, which = 4)
+plot(m13, which = 5)
+plot(m14, which = 5)
+plot(m15, which = 5)
+```
+Odległość Cooka jest liczona dla kadej obserwacji (3 największe oznaczone)
+Oceniając model możemy wyróżnić obserwacje o dużych resztach (te odstające), jak i wpływowe (wpływowe nie zawsze są tymi odstającymi - one mają duży wpływ na oszacowanie parametrów strukturalnych)
+
+Odległość Cooka jest liczona dla kadej obserwacji - liczony jest model na podstawie całego zbioru danych i bez tej obserwacji i budowana miara na podstawie jak zmieniły się te współczynniki beta. Jak jest zbyt duża to jest inny rząd wielkosći to nie ma wątpliwości, że jest wpływowa. Stawiamyu umowne granice. -> wykresy 4
+
+Wykresy 14 -> odległość Cooka i wskaźnik wpływu dla każdej zmiennej objaśniającej z osobna, mierzony dla poszczególnych obserwacji odstępstw o zmiennej objaśniającej xi od jej średniego poziomu. 
+
+Obserwacje, które są nietypowe mogą być: bo mają dużą resztę, bo x odbiegają, bo wpływ na wskaźniki beta.
+
+Tutaj ta linia Cooka jest poza naszymi zmiennymi.
+
+###Outliers Test
+Wykrycie obserwacji nietypowych za pomocą testu statystycznego
+
+**Bonferroni Outlier Test**
+
+Funkcja OutlierTest - powie nam dla każdej obserwacji czy ona jest wpływowa czy nie 
+
+argument n.max - liczba podawanych obserwacji nietypowych jest nie większa niż n.max
+
+```{r}
+outlierTest(m13, n.max = Inf)
+outlierTest(m14, n.max = Inf)
+outlierTest(m15, n.max = Inf)
+```
+**Wnioski**
+Ponieważ p-vaule > 0.01 to odrzucamy H0 dla modelu 14 i 15.
+Ponieważ p-vaule < 0.01 to nie ma podstaw do odrzucenia H0 dla modelu 13.
+Test Bonferroni Outlier nie wykazał obecności obserwacji nietypowych w analizowanych trzech modelach.
+(test wykonał dla trzech modeli)
+
+###Porównanie modeli 13-15
+
+Ocena dopasowania modeli GLM: statystyka odchylenia (`deviance`), kryterium informacyjne (AIC), miary pseudo-R2.
+
+W przypadku `family = gaussian` statystyka odchylenia = suma kwadratów reszt, zatem odchylenie standardowe reszt (średni błąd szacunku) = (deviance/df)^0.5
+
+Zdefiniowana została funkcja `ocena_modelu_GLM` licząca powyższe miary. Argumentem tej funkcji jest obiekt klasy glm.
+```{r}
+ocena_modelu_GLM <- function(model) {
+  odch_std_reszt <- (model$deviance/model$df.residual)^0.5
+  kryterium_AIC <- c(model$aic)
+  McFadden<-pR2(model)[4]
+  Cragg_Uhler<-pR2(model)[6]
+  ocena <- data.frame(odch_std_reszt, kryterium_AIC, McFadden, Cragg_Uhler)
+  return(ocena)
+}
+ocena_modeli <- rbind(model_13=ocena_modelu_GLM(m13), model_14=ocena_modelu_GLM(m14), model_15=ocena_modelu_GLM(m15))
+ocena_modeli
+```
+
+**Wnioski** - trzeba sprawdzić 
+
+Najlepiej dopasowany jest model 14, ponieważ ma najniższe kryterium AIC, niewysokie odchylenie standarodowe reszt, a dosyć wysokie kryterium McFaddena i Cragg_Uhlera.
+
+
+**Interpretacja modelu nr 14**
+
+```{r}
+m14$coefficients
+
+cat("\n\nexp(bi)\n")
+exp(m14$coefficients)
+```
+**Wnioski**
+
+
+Postać modelu 14 można zapisać także jako:
+
+** charges = exp(7.943585420 + 0.030508538 * `age` -0.005917269  * `bmi`) **
+
+
+Parametry modelu log normalnego posiadają interpretację:
+
+wyraz wolny b0 --> exp(b0) w tym modelu nie ma interpretacji, ponieważ badanie nie obejmowało osob w wieku 0 lat (niemowlat)
+
+age b1= 0.00781260 --> exp(b1)=1.007843   --> (exp(b1)-1)*100%
+
+Jeżeli wiek wzrosnie o jeden rok a pozostale zmienne nie ulegna zmianie to wysokość składki dla osób palących wzrośnie średnio o 0,78% dla osób z tym samym bmi cp.
+
+bmi b2=0.04392745   --> exp((b2)-1)=4,4%
+
+Jeżeli bmi wzrosnie o jedną jednostkę pozostale zmienne nie ulegna zmianie to wysokość składki dla osób palących wzrośnie średnio o 4,4% dla osób w tym samym wieku cp.
+
+
+#######################################################################################################################################################
+
+**3) Budowanie modelu logitowego i probitowego objaśniającego koszty leczenia rozliczane przez ubezpieczenie zdrowotne danej osoby PALĄCEJ. Zmienna `charges` została podzielona na dwie części: 1-powyżej średniej, 0-poniżej średniej**
+
+**Wczytanie danych i statystyki opisowe dla poszczególnych zmiennych: **
+```{r}
+dane9 <-  read.table("palacyl.csv", header = TRUE, sep = ";",dec=",")
+dane9$sex<-as.factor(dane9$sex)
+dane9$region<-as.factor(dane9$region)
+dane9$charges<-as.factor(dane9$charges)
+summary(dane9)
+```
+
+**Związek między kosztami leczenia rozliczanymi przez ubezpieczenie zdrowotne powyżej średniej, a potencjalnymi predyktorami**
+Wykresy warunkowych prawdopodobieństw wystąpienia wariantów cechy jakościowej (kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne powyżej średniej) pod warunkiem, że zmienna ilościowa przyjmuje określony poziom.
+```{r}
+cdplot(dane9$age, dane9$charges, xlab = "age", ylab = "charges")
+cdplot(dane9$bmi, dane9$charges, xlab = "bmi", ylab = "charges")
+cdplot(dane9$children, dane9$charges, xlab = "children", ylab = "charges")
+```
+**Wnioski:**
+Wiek beneficjenta palącego nie wpływa na pradopodobieństwo kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne powyżej średniej.
+Wraz ze wzrostem bmi beneficjenta palącego, wzrasta prawdopodobieństwo na koszty leczenia rozliczane przez ubezpieczenie zdrowotne powyżej średniej.
+Wraz ze wzrostem ilości osób na utrzymaniu beneficjenta palącego, wzrasta prawdopodobieństwo na koszty leczenia rozliczane przez ubezpieczenie zdrowotne powyżej średniej.
+
+**Podział zbioru na uczący i testowy**
+Zbiór uczący posłuży do budowy modelu, a zbiór testowy posłuży do oceny modelu. Dokonano losowego podziału w proporcji odpowiednio: 70% i 30%. W celu powtarzalności eksperymentu wykorzystano funkcję `set.seed()`, która inicjuje „ziarno” dla generatora liczb losowych - za każdym razem otrzymuje się ten sam zestaw liczb losowych.
+
+```{r}
+set.seed(1234)
+n <- nrow(dane9)
+liczby_losowe <- sample(c(1:n), round(0.7*n), replace = FALSE)
+dane9_uczacy <- dane9[liczby_losowe,]
+dane9_testowy <- dane9[-liczby_losowe,]
+```
+
+**Proporcje beneficjentów o kosztach leczenia rozliczanych przez ubezpieczenie zdrowotne powyżej średniej (1) i poniżej średniej(0) w podzbiorach danych**
+```{r}
+table(dane9$charges)/nrow(dane9)
+table(dane9_uczacy$charges)/nrow(dane9_uczacy)
+table(dane9_testowy$charges)/nrow(dane9_testowy)
+```
+
+**Macierz korelacji dla objaśniających zmiennych ilościowych**
+```{r}
+cor(dane9_uczacy[,c(1,3,4)]) 
+```
+**Wniosek:**
+Żadna ze zmiennych w modelu nie jest nadmiernie skorelowana, tzn.  nie przekracza`|r|>=0.7`. Wszystkie zmienne mogą się znaleźć w jednym modelu.
+
+**Estymacja modeli dwumianowych logitowych jednoczynnikowych**
+Estymujemy model dla zmiennej dychotomicznej/binarnej Y `family = binomial` z domyślną funkcją wiążącą probit `link = logit`
+
+```{r}
+logit1 <- glm(charges ~ age, data = dane9_uczacy, family = binomial)
+summary(logit1)$coefficients
+cat("\n")
+logit2 <- glm(charges ~ sex, data = dane9_uczacy, family = binomial)
+summary(logit2)$coefficients
+cat("\n")
+logit3 <- glm(charges ~ bmi, data = dane9_uczacy, family = binomial)
+summary(logit3)$coefficients
+cat("\n")
+logit4 <- glm(charges ~ children, data = dane9_uczacy, family = binomial)
+summary(logit4)$coefficients
+cat("\n")
+logit5 <- glm(charges ~ region, data = dane9_uczacy, family = binomial)
+summary(logit5)$coefficients
+```
+**logit1**
+charges=0.081091171+0.003901959*`age`
+
+Wniosek: Ponieważ p-value > 0,01 nie ma podstaw do odrzucenia H0. Wiek beneficjenta palącego nie ma istotnego wpływu na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne. Do budowania modelu nie będziemy włączać zmiennej `age`.
+
+**logit2**
+charges=-0.1100009+0.6579661*`sex`
+
+Wniosek: Ponieważ p-value > 0,01 nie ma podstaw do odrzucenia H0. Płeć beneficjenta palącego nie ma istotnego wpływu na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne. Do budowania modelu nie będziemy włączać zmiennej `sex`.
+
+**logit3**
+charges=-24.147463+0.816106*`bmi`
+
+Wniosek: Ponieważ p-value < 0,01 odrzucamy H0 na rzecz HA. Bmi beneficjenta palącego ma istotny wpływ na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne. Do budowania modelu będziemy włączać zmienną `bmi`.
+
+**logit4**
+charges=0.18054434-0.04325545*`children`
+
+Wniosek: Ponieważ p-value > 0,01 nie ma podstaw do odrzucenia H0. Ilość osób na utrzymaniu beneficjenta palącego nie ma istotnego wpływu na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne. Do budowania modelu nie będziemy włączać zmiennej `children`.
+
+**logit5**
+charges=-0.18232156+-0.05129329* `regionnorthwest` +0.92676203 *`regionsoutheast`+0.62415431*`regionsouthwest`
+
+Wniosek: Ponieważ p-value > 0,01 nie ma podstaw do odrzucenia H0. Region zamieszkania beneficjenta palącego nie ma istotnego wpływu na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne. Do budowania modelu nie będziemy włączać zmiennej `region`.
+
+
+**Porównanie dobroci dopasowania modeli logitowych 1-5**
+```{r}
+ocena_modelu_dwum <- function(model) {
+  kryterium_AIC <- c(model$aic)
+  McFadden<-pR2(model)[4]
+  Cragg_Uhler<-pR2(model)[6]
+  ocena <- data.frame(kryterium_AIC, McFadden, Cragg_Uhler)
+  return(ocena)
+}
+wyniki_oceny_logit <- rbind(
+  model_1=ocena_modelu_dwum(logit1), 
+  model_2=ocena_modelu_dwum(logit2), 
+  model_3=ocena_modelu_dwum(logit3), 
+  model_4=ocena_modelu_dwum(logit4),
+  model_5=ocena_modelu_dwum(logit5))
+wyniki_oceny_logit
+```
+**Wnioski**
+
+Najlepszym modelem jest model 3, ponieważ dla kryterium AIC przyjmuje najmniejsze wartości natomiast dla kryterium McFadden i Cragg Uhlera przyjmuje największe wartości.
+
+**Czy można do modelu dołączyć jeszcze jakąś zmienną objaśniającą?**
+
+Do modelu nie można dodać żadnej dodatkowej zmiennej objaśniającej, ponieważ żadna ze zmiennych poza `bmi` nie jest statystycznie istotna.
+
+**Wybór i interpretacja modelu**
+Wybieramy model charges ~ `bmi` -> logit3.
+
+logit(p)=-24.147463+0.816106*`bmi`
+logit(p)=ln(p/1-p)
+p/(1-p)=exp(-24.147463+0.816106*`bmi`)
+e^B0=szansa w grupie referencyjnej
+e^B1=(e^B1 - 1)*100%
+
+```{r}
+logit3$coefficients
+cat("\n exp(bi) \n")
+exp(logit3$coefficients)
+cat("\n exp(0.5*bi) \n")
+exp(0.5*logit3$coefficients[2])
+cat("\n exp(2*bi) \n")
+exp(2*logit3$coefficients[2])
+```
+
+`exp(b0)=3.257543e-11`, gdzie b0 to wyraz wolny => interpretuje się jako szansę zdarzenia w grupie referencyjnej (xi=0). Nie posiada interpretacji.
+
+`exp(b1) = 2.261676 => (exp(b1)-1)*100%= 126.16%`
+
+Jeżeli bmi beneficjenta palącego wzrośnie o 1 jednostkę w skali bmi, to szansa na koszty leczenia rozliczane przez ubezpieczenie zdrowotne powyżej średniej, wzrośnie średnio o 126.16%.
+
+`exp(0.5*b2) = 1.503887 => (exp(0.5*b2)-1)*100%= 50.39%`
+
+Jeżeli bmi beneficjenta palącego wzrośnie o 0.5 jednostki w skali bmi, to szansa na koszty leczenia rozliczane przez ubezpieczenie zdrowotne powyżej średniej, wzrośnie średnio o 50.39%.
+
+`exp(2*b3) = 5.115177 => (exp(2*b3)-1)*100%= 411.52%`
+
+Jeżeli bmi beneficjenta palącego wzrośnie o 2 jednostki w skali bmi, to szansa na koszty leczenia rozliczane przez ubezpieczenie zdrowotne powyżej średniej, wzrośnie średnio o 411.52%.
+
+```{r}
+predict(logit3, data.frame(bmi=c(17,22,27,32,37,42)), type="response")
+```
+**Wnioski:**
+Spodziewamy się, że u beneficjentów palących z bmi wynoszącym:
+*17 jednostek (niedowaga), prawdopodobieństwo kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne powyżej średniej będzie wynosić 0.00003452953, 
+*22 jednostki (waga prawidłowa), prawdopodobieństwo kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne powyżej średniej będzie wynosić 0.002039251, 
+*27 jednostek (nadwaga), prawdopodobieństwo kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne powyżej średniej będzie wynosić 0.107878, 
+*32 jednostki (otyłość I stopnia), prawdopodobieństwo kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne powyżej średniej będzie wynosić 0.8773884, 
+*37 jednostek (otyłość II stopnia), prawdopodobieństwo kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne powyżej średniej będzie wynosić 0.9976441, 
+*42 jednostki (otyłość III stopnia), prawdopodobieństwo kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne powyżej średniej będzie wynosić 0.9999601.
+
+
+**Estymacja modelu dwumianowego probitowego**
+Estymujemy model dla zmiennej dychotomicznej/binarnej Y `family = binomial` z funkcją wiążącą probit `link = probit`
+
+Jakie zmienne objaśniające wykorzystać?
+```{r}
+probit1 <- glm(charges ~ bmi, data = dane9_uczacy, family = binomial(link=probit))
+summary(probit1)$coefficients
+```
+
+Model probitowy – interpretacja parametrów sprowadza się do stwierdzenia, czy dana 
+zmienna jest stymulantą (gdy bi > 0), czy destymulantą modelu (gdy bi < 0)
+
+BMI jest istotnie stastystyczny. Zmienna BMI jest stymulantą.
+
+###Porównanie dobroci dopasowania modeli logit1 i probit1
+```{r}
+wyniki_oceny_logit_probit <- rbind(
+  model_logit_1=ocena_modelu_dwum(logit3), 
+  model_probit_1=ocena_modelu_dwum(probit1))
+wyniki_oceny_logit_probit
+```
+**Wnioski**
+
+Ogólnie lepszym modelem jest logitowy, ponieważ ma lepsze mozliwości interpretacyjne, jednak w tej sytuacji zdecydowanie lepszym okazał się model probitowy. Model probitowy posiada zdecydowanie mniejszą wartośc kryterium Akaike oraz wyraźnie wyższe wartości dla kryterium McFadden i Cragg Uhler.
+
+###Porównanie jakości predykcji modeli logit3 i probit1
+
+Tablice trafności dla wybranego punktu odcięcia p*
+
+Niech p* = proporcja z próby uczącej
+```{r}
+p <- table(dane9_uczacy$charges)[2]/nrow(dane9_uczacy)
+
+cat("Tablica trafności dla modelu logitowego - próba ucząca\n")
+tab_traf <- data.frame(obserwowane=logit3$y, przewidywane=ifelse(logit3$fitted.values>p, 1, 0))
+table(tab_traf)
+
+cat("Tablica trafności dla modelu probitowego - próba ucząca\n")
+tab_traf <- data.frame(obserwowane=probit1$y, przewidywane=ifelse(probit1$fitted.values>p, 1, 0))
+table(tab_traf)
+
+cat("Tablica trafności dla modelu logitowego - próba testowa\n")
+tab_traf <- data.frame(obserwowane=dane9_testowy$charges, przewidywane=ifelse(predict(logit3, dane9_testowy, type = "response")>p, 1, 0))
+table(tab_traf)
+
+cat("Tablica trafności dla modelu probitowego - próba testowa\n")
+tab_traf <- data.frame(obserwowane=dane9_testowy$charges, przewidywane=ifelse(predict(probit1, dane9_testowy, type = "response")>p, 1, 0))
+table(tab_traf)
+```
+
+
+**Miary jakości predykcji**
+
+Miary oparte na tablicy trafności dla wybranego punktu odcięcia p*
+
+Poniższa funkcja `miary_pred` została została określona dla argumentów: `model` (model dwumianowy), `dane` (np. zbiór uczący, testowy), `Y` (obserwowane Y 0-1 w analizowanym zbiorze danych).
+```{r}
+miary_pred <- function(model, dane, Y, p = 0.5) {
+  tab <- table(obserwowane = Y, przewidywane = ifelse(predict(model, dane, type = "response") > p, 1, 0))
+  ACC <- (tab[1,1]+tab[2,2])/sum(tab)
+  ER <- (tab[1,2]+tab[2,1])/sum(tab)
+  SENS <- tab[2,2]/(sum(tab[2,]))
+  SPEC <- tab[1,1]/sum(tab[1,])
+  PPV <- tab[2,2]/(sum(tab[,2]))
+  NPV <- tab[1,1]/sum(tab[,1])
+  miary <- data.frame(ACC, ER, SENS, SPEC,PPV,NPV)
+  return(miary)
+}
+```
+
+
+**Ocena zdolności predykcyjnej na zbiorze uczącym**
+```{r}
+wyniki_miary_pred <- rbind(
+  model_logit = miary_pred(model = logit3, dane = dane9_uczacy,  Y = dane9_uczacy$charges, p), 
+  model_probit = miary_pred(model = probit1, dane = dane9_uczacy, Y = dane9_uczacy$charges,  p))
+wyniki_miary_pred
+```
+
+
+
+**Ocena zdolności predykcyjnej na zbiorze testowym**
+```{r}
+wyniki_miary_pred <- rbind(
+  model_logit = miary_pred(model = logit3, dane = dane9_testowy,  Y = dane9_testowy$charges, p), 
+  model_probit = miary_pred(model = probit1, dane = dane9_testowy, Y = dane9_testowy$charges,  p))
+wyniki_miary_pred
+```
+
+**Wnioski**
+
+Dla zbioru uczącego i testowego lepszy okazał się model logitowy pod względem jakości predykcji.
+
+Poprzez porównanie wyników można stwierdzić, że model nie był przeuczony (przystosowany tylko dla zbioru uczącego).
+
+
+####Krzywa ROC
+
+Krzywa ROC prezentuje jeakość predykcji modelu dla wszystkich możliwych punktów odcięcia p* 
+(jest niezależna od wyboru p*). Dla modeli oszacowanych na zbiorze uczącym porównana została poniżej jakość predykcji na zbiorze uczącym i testowym. Proszę sprawdzić, czy jakość predykcji dla zbioru testowego nie pogorszyła się znacząco w stosunku do jakości predykcji dla zbioru uczącego.
+
+krzywa czerwona - ROC wyznaczona na zbiorze uczącym
+
+krzywa niebieska - ROC wyznaczona na zbiorze testowym
+```{r}
+rocobj1 <- roc(logit3$y, logit3$fitted.values)
+rocobj1_t <- roc(dane9_testowy$charges, predict(logit3, dane9_testowy, type = "response"))
+plot(rocobj1, main = "krzywe ROC dla modelu logitowego", col="red")
+lines(rocobj1_t, col="blue")
+
+rocobj2 <- roc(probit1$y, probit1$fitted.values)
+rocobj2_t <- roc(dane9_testowy$charges, predict(probit1, dane9_testowy, type = "response"))
+plot(rocobj2, main = "krzywe ROC dla modelu probitowego", col="red")
+lines(rocobj2_t, col="blue")
+```
+
+Inny sposób otrzymania wykresu krzywej ROC
+
+```{r}
+ggroc(rocobj1, legacy.axes = TRUE)+
+  ggtitle("Krzywa ROC dla modelu logitowego") +
+  geom_segment(aes(x = 0, xend = 1, y = 0, yend = 1), color="red")+
+  geom_hline(aes(yintercept=1), lty=2, color="grey")+
+  geom_hline(aes(yintercept=0), lty=2, color="grey")+
+  geom_vline(aes(xintercept=1), lty=2, color="grey")+
+  geom_vline(aes(xintercept=0), lty=2, color="grey")+
+  theme_classic()
+
+ggroc(rocobj2, legacy.axes = TRUE)+
+  ggtitle("Krzywa ROC dla modelu probitowego") +
+  geom_segment(aes(x = 0, xend = 1, y = 0, yend = 1), color="red")+
+  geom_hline(aes(yintercept=1), lty=2, color="grey")+
+  geom_hline(aes(yintercept=0), lty=2, color="grey")+
+  geom_vline(aes(xintercept=1), lty=2, color="grey")+
+  geom_vline(aes(xintercept=0), lty=2, color="grey")+
+  theme_classic()
+```
+
+####Pole powierzchni pod krzywą ROC
+
+dla zbioru uczącego
+```{r}
+pole_AUC_logit<-as.numeric(auc(logit3$y, logit3$fitted.values))
+pole_AUC_probit<-as.numeric(auc(probit1$y, probit1$fitted.values))
+pole_AUC <- rbind(pole_AUC_logit, pole_AUC_probit)
+pole_AUC
+```
+
+dla zbioru testowego
+```{r}
+pole_AUC_logit<-as.numeric(auc(dane9_testowy$charges, predict(logit3, dane9_testowy, type = "response")))
+pole_AUC_probit<-as.numeric(auc(dane9_testowy$charges, predict(probit1, dane9_testowy, type = "response")))
+pole_AUC <- rbind(pole_AUC_logit, pole_AUC_probit)
+pole_AUC
+```
+
+**Wnioski**
+
+Dla zbioru uczącego i testowego:
+
+Na podstawie pola pod krzywą ROC można stwierdzić, że oba modele: `logit` oraz `probit` mają wystarczająco dobrą zdolność predykcyjną.
+Wartości spełniają równanie 0,5<=AUC<=1.
+
+
+

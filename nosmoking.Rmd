@@ -1,0 +1,806 @@
+---
+title: Prognozowanie kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne w
+  USA zależności od wybranych czynników dla danej populacji beneficjentów niepalących.
+output:
+  word_document:
+    toc: yes
+  html_document:
+    toc: yes
+    toc_float: yes
+    theme: flatly
+    code_folding: hide
+  pdf_document:
+    toc: yes
+---
+**1) W pierwszym etapie dokonano estymacji, a kolejno weryfikacji otrzymanych modeli liniowych objaśniających koszty leczenia rozliczane przez ubezpieczenie zdrowotne danego beneficjenta NIEPALĄCEGO. Dokonano estymacji klasyczną metodą MNK - metoda najmniejszych kwadratów.Przed badaniem jednostkom została nadana funkcja los(), która wylosowała 274 jednostki tak aby zbiór był tak samo liczby jak w przypadku osób palących**
+
+**Pakiety:**
+```{r, message=FALSE, warning=FALSE}
+library("car") # funkcja vif()
+library("ggplot2") # wykresy - funkcja ggplot()
+library("lmtest") # testy diagnostyczne modeli lm
+library("pscl")
+library("pROC") #funkcje roc, auc
+```
+
+
+**Wczytanie danych i statystyki opisowe dla poszczególnych zmiennych: **
+Wczytanie danych
+```{r}
+dane1 <-  read.table("niepalacy.csv", header = TRUE, sep = ";",dec=",")
+dane1$sex<-as.factor(dane1$sex)
+dane1$region<-as.factor(dane1$region)
+summary(dane1)
+```
+**Na początku stworzono modele objaśniające koszty leczenia rozliczane przez ubezpieczenie zdrowotne w zależności od każdej ze zmiennych z osobna**
+
+**Model liniowy 1 ze zmienną `age`**
+```{r}
+#h: koszty leczenia rozliczane przez ubezpieczenie zdrowotne w zależności od wieku beneficjenta niepalącego
+m1 <- lm(charges  ~ age, data = dane1)
+summary(m1)
+```
+
+* charges=-2077.75+267.37*`age`
+
+Miary dopasowania:
+
+* odchylenie standardowe reszt: Se = 4809
+* Współczynnik determinacji R^2=0.3866
+* R^2 skorygowany=0.3844
+
+**Wniosek:**
+Model 1 wyjaśnia 38,66% kształtowania się kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+**Model liniowy 2 ze zmienną `sex`**
+```{r}
+#h: koszty leczenia rozliczane przez ubezpieczenie zdrowotne w zależności od płci beneficjenta niepalącego
+m2 <- lm(charges  ~ sex, data = dane1)
+summary(m2)
+```
+Miary dopasowania:
+
+* odchylenie standardowe reszt: Se = 6140
+* Współczynnik determinacji R^2=4.253e-06
+* R^2 skorygowany=-0.003672 
+
+**Wniosek:**
+Zmienna `sex` ma niestotny wpływ na koszty leczenia rozliczane przez ubezpieczenie zdrowotne.
+
+**Model liniowy3  ze zmienną `bmi`**
+```{r}
+#h: koszty leczenia rozliczane przez ubezpieczenie zdrowotne w zależności od bmi beneficjenta niepalącego
+m3 <- lm(charges  ~ bmi, data = dane1)
+summary(m3)
+```
+
+Miary dopasowania:
+
+* odchylenie standardowe reszt: Se = 6138
+* Współczynnik determinacji R^2=0.0007238
+* R^2 skorygowany=-0.00295 
+
+**Wniosek:**
+Zmienna `bmi` ma niestotny wpływ na koszty leczenia rozliczane przez ubezpieczenie zdrowotne.
+
+**Model 4 liniowy ze zmienną `children`**
+```{r}
+#h: koszty leczenia rozliczane przez ubezpieczenie zdrowotne w zależności od liczby osób na utrzymaniu beneficjenta niepalącego
+m4 <- lm(charges  ~ children, data = dane1)
+summary(m4)
+```
+miary dopasowania:
+
+* odchylenie standardowe reszt: Se = 6113
+* Współczynnik determinacji R^2=0.008763
+* R^2 skorygowany=0.005118
+
+**Wniosek:**
+Model wyjaśnia 0,887% kształtowania się kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+**Model liniowy 5 ze zmienną `region`**
+```{r}
+#h: koszty leczenia rozliczane przez ubezpieczenie zdrowotne w zależności od obszaru zamieszkania w USA beneficjenta niepalącego
+m5 <- lm(charges  ~ region, data = dane1)
+summary(m5)
+```
+
+Miary dopasowania:
+
+* odchylenie standardowe reszt: Se = 6131
+* Współczynnik determinacji R^2=0.01018
+* R^2 skorygowany=-0.0008136
+
+**Wniosek:**
+Model 5 wyjaśnia 1,02% kształtowania się kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+**Model liniowy m2,m3,m4 oraz m5 wyjaśniają bardzo mały procent kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne, natomiast model m1 wyjaśniają w większym stopniu w porównaniu do reszty badane zjawisko**
+
+**Do dalszej częśći budowy modelu wybrano tylko zmienną `age`**
+
+**Ponieważ model 1 ma tylko jedną zmienną objaśniającą można pokazać go na wykresie**
+```{r}
+wykres47 <- ggplot() +
+  ggtitle("Wykres 47: Dopasowanie modelu liniowego 1 charges = b0+b1*age") +
+  geom_point(aes(dane1$age, dane1$charges)) +
+  geom_line(aes(m1$model$age, m1$fitted.values), color = "green3") +
+  xlab("wiek")+
+  ylab("koszty leczenia rozliczane przez ubezpieczenie zdrowotne") +
+  theme_classic()
+plot(wykres47)
+```
+
+**Wniosek:**
+Analizując powyższy wykres 1 można zauważyć, że dopasowaie modelu jest dosyć dobre, jednak jest kilka jednostek odstających, które wpływają na obniżone wyjaśnienie badanego zjawiska.
+
+
+**W celu lepszego zbadania modelu 1 wykonano dla niego wykresy diagnostyczne**
+
+**Wykresy diagnostyczne modelu liniowego 1 oraz obserwacja jednostek wpływowych**
+```{r}
+plot(m1, which = 1:5)
+```
+
+**Wniosek:**
+Wariancja (rozrzut) reszt jest równomierne rozmieszczony wzdłuż linii poziomej, na poziomie =0, jednak można też zauważyć jednostki odstające. 
+Rozkład reszt nie jest normalny, można zauważyć obserwacje nietypowe o dużych resztach.
+Wartość średnia reszt jest bliska 0, co wskazuje właściwą postać funkcyjną modelu, jednak występuje duża ilośc jednostek odstających.
+Za pomocą miar: odległość Cooka oraz wskaźnik wpływu leverage (dźwignia) dokonano oceny wpływu poszczególnych obserwacji na parametry strukturalne modelu 1, które zostały kolejno usunięte i zapisane jako `dane2`.
+
+
+**Usunięcie jednostek odstających z modelu 1**
+```{r}
+dane2<-dane1[-c(40,174,183,43,90,197,167,191,215,76,134,168,24,104,152,207,255,254,149,2,251,175,211,243,50,136,230,28,171,213,177,117,14,102,127,212,54,179,252),]
+```
+
+
+
+**W testach statystycznych przyjmujemy poziom istotności alfa = 0.01**
+
+**Kolejno wykonano testy istotności dla parametrów modelu 1**
+
+Interpretacja testów istotności parametrów **modelu 1** (test F i test t)
+
+**test F:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* F= 171.5
+* p-value: <2.2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**test t:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= 13.094
+* p-value: <2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**Wniosek:** Wiek beneficjenta niepalącego statystycznie istotnie wpływa na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+
+**Kolejno stworzono model liniowy 6, który jest modelem 1 po usunięciu jednostek odstających**
+```{r}
+#h: koszty leczenia rozliczane przez ubezpieczenie zdrowotne w zależności od wieku beneficjenta niepalącego po wyeliminowaniu jednostek odsających
+m6 <- lm(charges  ~ age , data = dane2)
+summary(m6)
+```
+
+**Wnioski:**
+
+* charges=-3449.393+263.980*`age
+
+miary dopasowania:
+
+* odchylenie standardowe reszt: Se=748.8
+* Współczynnik determinacji R^2=0.9595
+* R^2 skorygowany=0.9593 
+
+Model wyjaśnia 95.95% kształtowania się kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne.
+
+**Interpretacja modelu 6*
+
+Wyraz wolny b0=-3449.393 w tym modelu nie ma interpretacji, ponieważ badanie nie obejmowało osób w wieku 0 lat (niemowlat).
+
+Współczynnik przy zmiennej "age" b1=263.980:
+
+* Jeżeli wiek beneficjenta niepalącego wzrośnie o 1 rok, to koszty leczenia rozliczane przez ubezpieczenie zdrowotne wzrosą średnio o 263.98 $ (ceteris paribus).
+* Jeżeli wiek beneficjenta niepalącego wzrośnie o 10 lat, to koszty leczenia rozliczane przez ubezpieczenie zdrowotne wzrosą średnio o 2639.8 $ (ceteris paribus).
+
+Interpretacja testów istotności parametrów **modelu 6** (test F i test t)
+
+**test F:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* F= 5522
+* p-value: < 2.2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**test t:**
+
+* H0= Beta i=0
+* H1= Beta i=/=0
+* t= -24.22
+* p-value: <2e-16
+* Wniosek: Odrzucamy H0 na korzyść H1.
+
+**Wniosek:** Parametr `age`w modelu istotnie różnią się od 0 na wszystkich poziomach istotności.
+
+
+**Wykresy diagnostyczne modelu liniowego 6**
+```{r}
+plot(m6, which = 1:3)
+```
+**Wniosek:**
+Wariancja (rozrzut) reszt jest równomierne rozmieszczony wzdłuż linii poziomej, na poziomie=0. 
+Rozkład reszt jest normalny.
+Wartość średnia reszt jest bliska 0, co wskazuje właściwą postać funkcyjną modelu.
+
+**Porównanie na wykresie modelu 1 oraz modelu 6 przed i po odrzuceniu wartości nietypowych**
+```{r}
+wykres <- ggplot() +
+  ggtitle("Dopasowanie modelu liniowego sbp = b0+b1*age", 
+          subtitle= "          punkty - dane empiryczne, 
+          linia niebieska - model dla całego zbioru, 
+          linia czerwona - model po odrzuceniu wartości nietypowych") +
+  geom_point(aes(dane1$age, dane1$charges)) +
+  geom_line(aes(m1$model$age, m1$fitted.values), color = "blue") +
+  geom_line(aes(m6$model$age, m6$fitted.values), color = "red") +
+  xlab("wiek beneficjenta niepalącego")+
+  ylab("koszty leczenia rozliczane przez ubezpieczenie zdrowotne") +
+  theme_classic()
+plot(wykres)
+```
+**Testy statystyczne dla modelu 6**
+
+*Test normalności Shapiro-Wilka dla reszt modelu 6*
+```{r}
+shapiro.test(m6$residuals)
+```
+**Wniosek:**
+
+Ponieważ p-value > 0.01 to nie ma podstaw do odrzucenia H0 na rzecz H1. Reszty modelu mają rozkład normalny.
+
+
+*Test Breuscha-Pagana jednorodności wariancji reszt modelu 6*
+```{r}
+bptest(m6)
+```
+**Wniosek:**
+
+Ponieważ p-value > 0.01 to nie ma podstaw do odrzucenia H0 o jednorodności wariancji reszt.
+
+
+*Test Durbina-Watsona niezależności reszt modelu 6*
+```{r}
+dwtest(m6, order.by = ~age, data = dane2)
+```
+**Wniosek:**
+
+Ponieważ p-value > 0.01 to nie ma podstaw do odrzucenia H0, mówiącej o niezależności reszt.
+
+
+*Test rainbow na liniowość modelu modelu 6*
+```{r}
+raintest(m6)
+```
+**Wniosek:**
+
+Ponieważ p-value > 0.01 to nie ma podstaw do odrzucenia H0, mówiącej o liniowości modelu.
+
+**Podsumowanie:**
+
+`Model 1` z jedną zmienną objaśniającą `wiek` wyjaśnia 38.66% kształtowania się kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne dla benefijcjenyów niepalących.`Model 6` z z jedną zmienną objaśniającą `wiek`po wyeliminowaniu jednostek odstających wyjaśnia wyjaśnia 95.95% kształtowania się kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne dla benefijcjenyów niepalących. W `modelu 6` znacznie zmniejszyło się  odchylenie standardowe reszt oraz model spełnia wszystkie założenia statystyczne. W tym modelu można, lecz niekonieczne jest poszukiwanie lepszej postaci modelu.
+
+
+##########################################################################################################################
+
+**2) Estymacja, a kolejno weryfikacja otrzymanego modelu klasy glm, objaśniającego koszty leczenia rozliczane przez ubezpieczenie zdrowotne danej osoby NIEPALĄCEJ.**
+
+
+```{r}
+#h: koszty leczenia rozliczane przez ubezpieczenie zdrowotne w zależności od wieku beneficjenta niepalącego po wyeliminowaniu jednostek odsających
+m7 <- glm(charges  ~ age , data = dane2, family = gaussian)
+summary(m7)
+```
+Minimalną wartoscią tego modelu jest -1673.95, a najwyższą: 1848.62. Wartość środkowa wynosi -27.66. Kwartyl pierwszy- 25% obserwacji wynosi -516.71, a 75% obserwacji jest położonych powyżej tej wartości. Kwartyl trzeci - 75% obserwacji połżonych jest poniżej 526.82, a 25% obserwacji położonych jest powyżej tej wartości.
+
+**test t dla wyrazu wolnego:
+h0= Beta i=0
+H1=Beta i=/=0
+t=-24.22
+p-value <2e-16
+Wniosek: Odrzucamy H0 na rzecz H1.
+
+*test t dla zmiennej age:
+h0= Beta i=0
+H1=Beta i=/=0
+t=74.31
+p-value: <2e-16
+Wniosek: Odrzucamy H0 na rzecz H1
+Wiek statystycznie istotnie wpływa na poziom kosztów leczenia osob niepalących rozliczanych przez ubezpieczenie zdrowotne.
+
+Kryterium AIC wynosi 3781.5
+Wnioski:
+Postać modelu:
+charges = -3449.39 + 263.98 * age
+Ponieważ p-value < alfa 0.01 to odrzucamy H0 na korzyść H1, wiek statystycznie istotnie wpływa na poziom kosztów leczenia osób niepalących roliczanych przez ubezpieczenie zdrowotne.
+```{r}
+dane3<-dane1[-c(40,174,183,43,90,197,167,191,215,76,134,168,24,104,152,207,255,254,149,2,251,175,211,243,50,136,230,28,171,213,177,117,14,102,127,212,54,179,252,163,226,72,122,144,140,246,13,203,223,33,105,48,18,235,20),]
+```
+
+
+```{r}
+m8 <- glm(charges  ~ age , data = dane3, family = gaussian(link = "log"))
+summary(m8) 
+```
+Minimalną wartoscią tego modelu jest -1447.64, a najwyższą: 2586.25. Wartość środkowa wynosi -89.84. Kwartyl pierwszy- 25% obserwacji wynosi -802.90, a 75% obserwacji jest położonych powyżej tej wartości. Kwartyl trzeci - 75% obserwacji położonych jest poniżej 456.54, a 25% obserwacji położonych jest powyżej tej wartości.
+
+**test t dla wyrazu wolnego:
+h0= Beta i=0
+H1=Beta i=/=0
+t=181.20
+p-value <2e-16
+Wniosek: Odrzucamy H0 na rzecz H1.
+
+*test t dla zmiennej age:
+h0= Beta i=0
+H1=Beta i=/=0
+t=49.75.
+p-value: <2e-16
+Wniosek: Odrzucamy H0 na rzecz H1
+Wiek statystycznie istotnie wpływa na poziom kosztów leczenia osob niepalacych rozliczanych przez ubezpieczenie zdrowotne
+
+Kryterium AIC wynosi 3577.8
+
+Wnioski:
+Podstać modelu:
+charges=7.133537 + 0.040198 * age
+Ponieważ p-value < alfa 0.01 to odrzucamy H0 na korzyść H1, wiek statystycznie istotnie wpływa na poziom kosztów leczenia osób niepalących roliczanych przez ubezpieczenie zdrowotne.
+```{r}
+dane4<-dane1[-c(40,174,183,43,90,197,167,191,215,76,134,168,24,104,152,207,255,254,149,2,251,175,211,243,50,136,230,28,171,213,177,117,14,102,127,212,54,179,252,144,140,226,246,163,13,203,72,122,33,105,223,260,199,235,20,48,3,150,194,241,5,231,269,59,63,66,219,165,240),]
+```
+
+```{r}
+m9 <- glm(charges  ~ age , data = dane4, family = gaussian(link = "inverse"))
+summary(m9) 
+```
+Minimalną wartością tego modelu jest -2582.3, a najwyższą: 3139.7. Wartość środkowa wynosi -195.7. Kwartyl pierwszy- 25% obserwacji wynosi -1062.1, a 75% obserwacji jest położonych powyżej tej wartości. Kwartyl trzeci - 75% obserwacji położonych jest poniżej 720.7, a 25% obserwacji położonych jest powyżej tej wartości.
+
+**test t dla wyrazu wolnego:
+h0= Beta i=0
+H1=Beta i=/=0
+t=36.40
+p-value <2e-16
+Wniosek: Odrzucamy H0 na rzecz H1.
+
+*test t dla zmiennej age:
+h0= Beta i=0
+H1=Beta i=/=0
+t=-27.16.
+p-value: <2e-16
+Wniosek: Odrzucamy H0 na rzecz H1
+Wiek statystycznie istotnie wpływa na poziom kosztów leczenia osob niepalacych rozliczanych przez ubezpieczenie zdrowotne
+Kryterium AIC dla tego modelu wynosi 3474.1
+Wnioski:
+Postać modelu:
+charges=0.00004172 - 0.0000006166 * age
+Ponieważ p-value < alfa 0.01 to odrzucamy H0 na korzyść H1, wiek statystycznie istotnie wpływa na poziom kosztów leczenia osób niepalących roliczanych przez ubezpieczenie zdrowotne.
+```{r}
+plot(m7, which = 4)
+plot(m8, which = 4)
+plot(m9, which = 4)
+plot(m7, which = 5)
+plot(m8, which = 5)
+plot(m9, which = 5)
+```
+
+Odległość Cooka jest liczona dla każdej obserwacji (3 największe oznaczone) Oceniając model możemy wyróżnić obserwacje o dużych resztach (te odstające), jak i wpływowe (wpływowe nie zawsze są tymi odstającymi - one mają duży wpływ na oszacowanie parametrów strukturalnych)
+Odległość Cooka jest liczona dla każdej obserwacji - liczony jest model na podstawie całego zbioru danych i bez tej obserwacji i budowana miara na podstawie jak zmieniły się te współczynniki beta. Jak jest zbyt duża to jest inny rząd wielkości to nie ma wątpliwości, że jest wpływowa. Stawiamy umowne granice. 
+Odległość Cooka i wskaźnik wpływu dla każdej zmiennej objaśniającej z osobna, mierzony dla poszczególnych obserwacji odstępstw o zmiennej objaśniającej xi od jej średniego poziomu.
+Obserwacje, które są nietypowe mogą być: bo mają dużą resztę, bo x odbiegają, bo wpływ na wskaźniki beta.
+Tutaj Linia Cooka jest poza naszymi zmiennymi.
+
+
+###Outliers Test
+Wykrycie obserwacji nietypowych za pomocą testu statystycznego
+
+**Bonferroni Outlier Test**
+
+Funkcja OutlierTest - powie nam dla każdej obserwacji czy ona jest wpływowa czy nie 
+
+argument n.max - liczba podawanych obserwacji nietypowych jest nie większa niż n.max
+
+```{r}
+outlierTest(m7, n.max = Inf)
+outlierTest(m8, n.max = Inf)
+outlierTest(m9, n.max = Inf)
+```
+**Wnioski**
+Ponieważ p-vaule > 0.01 to odrzucamy H0 dla modelu 7.
+Ponieważ p-vaule < 0.01 to nie ma podstaw do odrzucenia H0 dla modeli 8 i 9.
+Test Bonferroni Outlier nie wykazał obecności obserwacji nietypowych w analizowanych trzech modelach.
+(test został wykonany dla trzech modeli)
+
+Ocena dopasowania modeli GLM: statystyka odchylenia (deviance), kryterium informacyjne (AIC), miary pseudo-R2.
+W przypadku family = gaussian statystyka odchylenia = suma kwadratów reszt, zatem odchylenie standardowe reszt (średni błąd szacunku) = (deviance/df)^0.5
+Zdefiniowana została funkcja ocena_modelu_GLM licząca powyższe miary. Argumentem tej funkcji jest obiekt klasy glm.
+
+
+```{r}
+ocena_modelu_GLM <- function(model) {
+  odch_std_reszt <- (model$deviance/model$df.residual)^0.5
+  kryterium_AIC <- c(model$aic)
+  McFadden<-pR2(model)[4]
+  Cragg_Uhler<-pR2(model)[6]
+  ocena <- data.frame(odch_std_reszt, kryterium_AIC, McFadden, Cragg_Uhler)
+  return(ocena)
+}
+ocena_modeli <- rbind(model_7=ocena_modelu_GLM(m7), model_8=ocena_modelu_GLM(m8), model_9=ocena_modelu_GLM(m9))
+ocena_modeli
+```
+**Wnioski:**
+Miary pseudo R^2 zbudowane na bazie wiarygodności modelu w porównaniu do wiarygodności modelu 0 (tylko z wyrazem wolnym). R^2 jaki procent zmienności Y jest wyjaśniany poprzez zmienność zmiennych objaśniających. Tutaj nie ma takiej interpretacji, dlatego jest nazwa pseudo R^2 żeby ni interpretować jako R^2 w modelu liniowym. Miary pseudo R^2 zwykle w dolnych obszarach się znajdują.
+Na bazie statystyki odchylenia mamy kryteria informacyjne.
+Dla rozkładu normalnego statystyka odchylenia jest równa sumie kwadratów reszt
+
+Wnioski:
+Najlepiej dopasowanyjest model 9, ponieważ ma najniższe kryterium AIC.
+
+
+```{r}
+m9$coefficients
+cat("\n\nexp(bi)\n")
+exp(m9$coefficients)
+```
+**Interetacje**
+
+Postać modelu 9 można zapisać także jako:
+
+** charges = exp( 1.0004173 + 0.9999938 * `age`) **
+
+
+Parametry modelu log normalnego posiadają interpretację:
+
+wyraz wolny b0 --> exp(b0) w tym modelu nie ma interpretacji, ponieważ badanie nie obejmowało osob w wieku 0 lat (niemowlat)
+
+age b1= -6.166228e-06 --> exp(b1)=0.9999938   --> (exp(b1)-1)*100%
+
+Jeżeli wiek wzrośnie o jeden rok a pozostałe zmienne nie ulegną zmianie to wysokość składki dla osób niepalących spadnie średnio o 0.01% dla osób tej samej płci.
+
+
+
+**3) Budowanie modelu logitowego i probitowego objaśniającego koszty leczenia rozliczane przez ubezpieczenie zdrowotne danej osoby NIEPALĄCEJ. Zmienna `charges` została podzielona na dwie części: 1-powyżej średniej, 0-poniżej średniej**
+
+**Wczytanie danych i statystyki opisowe dla poszczególnych zmiennych: **
+```{r}
+dane5 <-  read.table("niepalacyl.csv", header = TRUE, sep = ";",dec=",")
+dane5$sex<-as.factor(dane5$sex)
+dane5$region<-as.factor(dane5$region)
+dane5$charges<-as.factor(dane5$charges)
+summary(dane5)
+```
+
+**Związek między kosztami leczenia rozliczanymi przez ubezpieczenie zdrowotne powyżej średniej, a potencjalnymi predyktorami**
+Wykresy warunkowych prawdopodobieństw wystąpienia wariantów cechy jakościowej (kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne powyżej średniej) pod warunkiem, że zmienna ilościowa przyjmuje określony poziom.
+```{r}
+cdplot(dane5$age, dane5$charges, xlab = "age", ylab = "charges")
+cdplot(dane5$bmi, dane5$charges, xlab = "bmi", ylab = "charges")
+cdplot(dane5$children, dane5$charges, xlab = "children", ylab = "charges")
+```
+**Wnioski:**
+Wraz ze wzrostem wieku beneficjenta niepalącego, wzrasta prawdopodobieństwo na koszty leczenia rozliczane przez ubezpieczenie zdrowotne powyżej średniej.
+Wraz ze wzrostem bmi beneficjenta niepalącego, wzrasta prawdopodobieństwo na koszty leczenia rozliczane przez ubezpieczenie zdrowotne powyżej średniej.
+Wraz ze wzrostem ilości osób na utrzymaniu beneficjenta niepalącego, wzrasta prawdopodobieństwo na koszty leczenia rozliczane przez ubezpieczenie zdrowotne powyżej średniej.
+
+**Podział zbioru na uczący i testowy**
+Zbiór uczący posłuży do budowy modelu, a zbiór testowy posłuży do oceny modelu. Dokonano losowego podziału w proporcji odpowiednio: 70% i 30%. W celu powtarzalności eksperymentu wykorzystano funkcję `set.seed()`, która inicjuje „ziarno” dla generatora liczb losowych - za każdym razem otrzymuje się ten sam zestaw liczb losowych.
+
+```{r}
+set.seed(1234)
+n <- nrow(dane5)
+liczby_losowe <- sample(c(1:n), round(0.7*n), replace = FALSE)
+dane5_uczacy <- dane5[liczby_losowe,]
+dane5_testowy <- dane5[-liczby_losowe,]
+```
+
+**Proporcje beneficjentów o kosztach leczenia rozliczanych przez ubezpieczenie zdrowotne powyżej średniej (1) i poniżej średniej(0) w podzbiorach danych**
+```{r}
+table(dane5$charges)/nrow(dane5)
+table(dane5_uczacy$charges)/nrow(dane5_uczacy)
+table(dane5_testowy$charges)/nrow(dane5_testowy)
+```
+
+**Macierz korelacji dla objaśniających zmiennych ilościowych**
+```{r}
+cor(dane5_uczacy[,c(1,3,4)]) 
+```
+**Wniosek:**
+Żadna ze zmiennych w modelu nie jest nadmiernie skorelowana, tzn.  nie przekracza`|r|>=0.7`. Wszystkie zmienne mogą się znaleźć w jednym modelu.
+
+**Estymacja modeli dwumianowych logitowych jednoczynnikowych**
+Estymujemy model dla zmiennej dychotomicznej/binarnej Y `family = binomial` z domyślną funkcją wiążącą probit `link = logit`
+
+```{r}
+logit1 <- glm(charges ~ age, data = dane5_uczacy, family = binomial)
+summary(logit1)$coefficients
+cat("\n")
+logit2 <- glm(charges ~ sex, data = dane5_uczacy, family = binomial)
+summary(logit2)$coefficients
+cat("\n")
+logit3 <- glm(charges ~ bmi, data = dane5_uczacy, family = binomial)
+summary(logit3)$coefficients
+cat("\n")
+logit4 <- glm(charges ~ children, data = dane5_uczacy, family = binomial)
+summary(logit4)$coefficients
+cat("\n")
+logit5 <- glm(charges ~ region, data = dane5_uczacy, family = binomial)
+summary(logit5)$coefficients
+```
+
+**logit1**
+charges=-8.467379+0.202675*`age`
+
+Wniosek: Ponieważ p-value < 0,01 odrzucamy H0 na rzecz HA. Wiek beneficjenta niepalącego ma istotny wpływ na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne. Do budowania modelu będziemy włączać zmienną `age`.
+
+**logit2**
+charges=-0.26826398+0.03187521*`sex`
+
+Wniosek: Ponieważ p-value > 0,01 nie ma podstaw do odrzucenia H0. Płeć beneficjenta niepalącego nie ma istotnego wpływu na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne. Do budowania modelu nie będziemy włączać zmiennej `sex`.
+
+**logit3**
+charges=-0.001510450-0.008028243*`bmi`
+
+Wniosek: Ponieważ p-value > 0,01 nie ma podstaw do odrzucenia H0. Bmi beneficjenta niepalącego nie ma istotnego wpływu na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne. Do budowania modelu nie będziemy włączać zmiennej `bmi`.
+
+**logit4**
+charges=-0.28509379+0.03186636*`children`
+
+Wniosek: Ponieważ p-value > 0,01 nie ma podstaw do odrzucenia H0. Ilość osób na utrzymaniu beneficjenta niepalącego nie ma istotnego wpływu na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne. Do budowania modelu nie będziemy włączać zmiennej `children`.
+
+**logit5**
+charges=0.1541507-0.2341934*`regionnorthwest`-0.7866732*`regionsoutheast`-0.7041970*`regionsouthwest`
+
+Wniosek: Ponieważ p-value > 0,01 nie ma podstaw do odrzucenia H0. Region zamieszkania beneficjenta niepalącego nie ma istotnego wpływu na poziom kosztów leczenia rozliczanych przez ubezpieczenie zdrowotne. Do budowania modelu nie będziemy włączać zmiennej `region`.
+
+**Porównanie dobroci dopasowania modeli logitowych 1-5**
+```{r}
+ocena_modelu_dwum <- function(model) {
+  kryterium_AIC <- c(model$aic)
+  McFadden<-pR2(model)[4]
+  Cragg_Uhler<-pR2(model)[6]
+  ocena <- data.frame(kryterium_AIC, McFadden, Cragg_Uhler)
+  return(ocena)
+}
+wyniki_oceny_logit <- rbind(
+  model_1=ocena_modelu_dwum(logit1), 
+  model_2=ocena_modelu_dwum(logit2), 
+  model_3=ocena_modelu_dwum(logit3), 
+  model_4=ocena_modelu_dwum(logit4),
+  model_5=ocena_modelu_dwum(logit5))
+wyniki_oceny_logit
+```
+**Wnioski**
+
+Najlepszym modelem jest model 1, ponieważ dla kryterium AIC przyjmuje najmniejsze wartości natomiast dla kryterium McFadden i Cragg Uhlera przyjmuje największe wartości.
+
+**Czy można do modelu dołączyć jeszcze jakąś zmienną objaśniającą?**
+
+Do modelu nie można dodać żadnej dodatkowej zmiennej objaśniającej, ponieważ żadna ze zmiennych poza `age` nie jest statystycznie istotna.
+
+**Wybór i interpretacja modelu**
+Wybieramy model charges ~ `age` -> logit1.
+
+logit(p)=-8.467379+0.202675*`age`
+logit(p)=ln(p/1-p)
+p/(1-p)=exp(-8.467379+0.202675*`age`)
+e^B0=szansa w grupie referencyjnej
+e^B1=(e^B1 - 1)*100%
+
+```{r}
+logit1$coefficients
+cat("\n exp(bi) \n")
+exp(logit1$coefficients)
+cat("\n exp(5*bi) \n")
+exp(5*logit1$coefficients[2])
+cat("\n exp(10*bi) \n")
+exp(10*logit1$coefficients[2])
+```
+
+`exp(b0)=0.0002102152`, gdzie b0 to wyraz wolny => interpretuje się jako szansę zdarzenia w grupie referencyjnej (xi=0). Nie posiada interpretacji.
+
+`exp(b1) = 1.2246743885 => (exp(b)-1)*100%= 22.47%`
+
+Jeżeli wiek beneficjenta niepalącego wzrośnie o 1 rok, to szansa na koszty leczenia rozliczane przez ubezpieczenie zdrowotne powyżej średniej, wzrośnie średnio o 22.47%.
+
+`exp(5*b2) = 2.754883 => (exp(5*b)-1)*100%= 175.49%`
+
+Jeżeli wiek beneficjenta niepalącego wzrośnie o 5 lat, to szansa na koszty leczenia rozliczane przez ubezpieczenie zdrowotne powyżej średniej, wzrośnie średnio o 175.49%.
+
+`exp(10*b3) = 7.589381  => (exp(10*b)-1)*100%= 658.94%`
+
+Jeżeli wiek beneficjenta niepalącego wzrośnie o 10 lat, to szansa na koszty leczenia rozliczane przez ubezpieczenie zdrowotne powyżej średniej, wzrośnie średnio o 658.94%.
+
+
+
+```{r}
+predict(logit1, data.frame(age=c(20,30,40,50,60)), type="response")
+```
+**Wnioski:**
+Spodziewamy się, że u beneficjentów niepalących w wieku:
+*20 lat, prawdopodobieństwo rozliczanych kosztów leczenia przez ubezpieczenie zdrowotne powyżej średniej będzie wynosić 0.01196327, 
+*30 lat, prawdopodobieństwo rozliczanych kosztów leczenia przez ubezpieczenie zdrowotne powyżej średniej będzie wynosić 0.08415948, 
+*40 lat, prawdopodobieństwo rozliczanych kosztów leczenia przez ubezpieczenie zdrowotne powyżej średniej będzie wynosić 0.41086790, 
+*50 lat, prawdopodobieństwo rozliczanych kosztów leczenia przez ubezpieczenie zdrowotne powyżej średniej będzie wynosić 0.84109143, 
+*60 lat, prawdopodobieństwo rozliczanych kosztów leczenia przez ubezpieczenie zdrowotne powyżej średniej będzie wynosić 0.97571049, 
+
+
+**Estymacja modelu dwumianowego probitowego**
+Estymujemy model dla zmiennej dychotomicznej/binarnej Y `family = binomial` z funkcją wiążącą probit `link = probit`
+
+Jakie zmienne objaśniające wykorzystać?
+```{r}
+probit1 <- glm(charges ~ age, data = dane5_uczacy, family = binomial(link=probit))
+summary(probit1)$coefficients
+```
+
+Jak interpretujemy parametry modelu probitowego?
+
+Model probitowy – interpretacja parametrów sprowadza się do stwierdzenia, czy dana 
+zmienna jest stymulantą (gdy bi > 0), czy destymulantą modelu (gdy bi < 0)
+
+Według powyższej tabeli wiek jest istotnie stastystyczny.Zmienna age jest stymulantą.
+
+###Porównanie dobroci dopasowania modeli logit1 i probit1
+```{r}
+wyniki_oceny_logit_probit <- rbind(
+  model_logit_1=ocena_modelu_dwum(logit1), 
+  model_probit_1=ocena_modelu_dwum(probit1))
+wyniki_oceny_logit_probit
+```
+**Wnioski**
+
+Lepszym modelem jest logitowy, ponieważ ma lepsze mozliwości interpretacyjne, posiada mniejszą wartośc kryterium Akaike oraz wyższe wartości dla kryterium McFadden i Cragg Uhler.
+
+###Porównanie jakości predykcji modeli logit1 i probit1
+
+Tablice trafności dla wybranego punktu odcięcia p*
+
+Niech p* = proporcja z próby uczącej
+```{r}
+p <- table(dane5_uczacy$charges)[2]/nrow(dane5_uczacy)
+
+cat("Tablica trafności dla modelu logitowego - próba ucząca\n")
+tab_traf <- data.frame(obserwowane=logit1$y, przewidywane=ifelse(logit1$fitted.values>p, 1, 0))
+table(tab_traf)
+
+cat("Tablica trafności dla modelu probitowego - próba ucząca\n")
+tab_traf <- data.frame(obserwowane=probit1$y, przewidywane=ifelse(probit1$fitted.values>p, 1, 0))
+table(tab_traf)
+
+cat("Tablica trafności dla modelu logitowego - próba testowa\n")
+tab_traf <- data.frame(obserwowane=dane5_testowy$charges, przewidywane=ifelse(predict(logit1, dane5_testowy, type = "response")>p, 1, 0))
+table(tab_traf)
+
+cat("Tablica trafności dla modelu probitowego - próba testowa\n")
+tab_traf <- data.frame(obserwowane=dane5_testowy$charges, przewidywane=ifelse(predict(probit1, dane5_testowy, type = "response")>p, 1, 0))
+table(tab_traf)
+```
+
+
+####Miary jakości predykcji
+
+Miary oparte na tablicy trafności dla wybranego punktu odcięcia p*
+
+Poniższa funkcja `miary_pred` została została określona dla argumentów: `model` (model dwumianowy), `dane` (np. zbiór uczący, testowy), `Y` (obserwowane Y 0-1 w analizowanym zbiorze danych).
+```{r}
+miary_pred <- function(model, dane, Y, p = 0.5) {
+  tab <- table(obserwowane = Y, przewidywane = ifelse(predict(model, dane, type = "response") > p, 1, 0))
+  ACC <- (tab[1,1]+tab[2,2])/sum(tab)
+  ER <- (tab[1,2]+tab[2,1])/sum(tab)
+  SENS <- tab[2,2]/(sum(tab[2,]))
+  SPEC <- tab[1,1]/sum(tab[1,])
+  PPV <- tab[2,2]/(sum(tab[,2]))
+  NPV <- tab[1,1]/sum(tab[,1])
+  
+  miary <- data.frame(ACC, ER, SENS, SPEC,PPV,NPV)
+  return(miary)
+}
+```
+
+
+Ocena zdolności predykcyjnej na zbiorze uczącym
+
+```{r}
+wyniki_miary_pred <- rbind(
+  model_logit = miary_pred(model = logit1, dane = dane5_uczacy,  Y = dane5_uczacy$charges, p), 
+  model_probit = miary_pred(model = probit1, dane = dane5_uczacy, Y = dane5_uczacy$charges,  p))
+wyniki_miary_pred
+```
+
+Ocena zdolności predykcyjnej na zbiorze testowym
+
+```{r}
+wyniki_miary_pred <- rbind(
+  model_logit = miary_pred(model = logit1, dane = dane5_testowy,  Y = dane5_testowy$charges, p), 
+  model_probit = miary_pred(model = probit1, dane = dane5_testowy, Y = dane5_testowy$charges,  p))
+wyniki_miary_pred
+```
+
+**Wnioski**
+
+Dla danego progu odcięcia:
+
+Na podstawie powyższych miar jakości predykcji można stwierdzić, że dla zbioru uczącego model logitowy i probitowy w podstawowych miarach mają taki sam wynik.
+
+Dla zbioru testowego odrobinę lepszy okazał się model logitowy pod względem jakości predykcji.
+
+Poprzez porównanie wyników można stwierdzić, że model nie był przeuczony (przystosowany tylko dla zbioru uczącego).
+
+Należy sprawdzić, czy na zbiorze testowym nie pogorszyły się znacząco miary jakości predykcji w stosunku do zbioru uczącego.
+
+####Krzywa ROC
+
+Krzywa ROC prezentuje jeakość predykcji modelu dla wszystkich możliwych punktów odcięcia p* 
+(jest niezależna od wyboru p*). Dla modeli oszacowanych na zbiorze uczącym porównana została poniżej jakość predykcji na zbiorze uczącym i testowym. Proszę sprawdzić, czy jakość predykcji dla zbioru testowego nie pogorszyła się znacząco w stosunku do jakości predykcji dla zbioru uczącego.
+
+krzywa czerwona - ROC wyznaczona na zbiorze uczącym
+
+krzywa niebieska - ROC wyznaczona na zbiorze testowym
+```{r}
+rocobj1 <- roc(logit1$y, logit1$fitted.values)
+rocobj1_t <- roc(dane5_testowy$charges, predict(logit1, dane5_testowy, type = "response"))
+plot(rocobj1, main = "krzywe ROC dla modelu logitowego", col="red")
+lines(rocobj1_t, col="blue")
+
+rocobj2 <- roc(probit1$y, probit1$fitted.values)
+rocobj2_t <- roc(dane5_testowy$charges, predict(probit1, dane5_testowy, type = "response"))
+plot(rocobj2, main = "krzywe ROC dla modelu probitowego", col="red")
+lines(rocobj2_t, col="blue")
+```
+
+Inny sposób otrzymania wykresu krzywej ROC
+
+```{r}
+ggroc(rocobj1, legacy.axes = TRUE)+
+  ggtitle("Krzywa ROC dla modelu logitowego") +
+  geom_segment(aes(x = 0, xend = 1, y = 0, yend = 1), color="red")+
+  geom_hline(aes(yintercept=1), lty=2, color="grey")+
+  geom_hline(aes(yintercept=0), lty=2, color="grey")+
+  geom_vline(aes(xintercept=1), lty=2, color="grey")+
+  geom_vline(aes(xintercept=0), lty=2, color="grey")+
+  theme_classic()
+
+ggroc(rocobj2, legacy.axes = TRUE)+
+  ggtitle("Krzywa ROC dla modelu probitowego") +
+  geom_segment(aes(x = 0, xend = 1, y = 0, yend = 1), color="red")+
+  geom_hline(aes(yintercept=1), lty=2, color="grey")+
+  geom_hline(aes(yintercept=0), lty=2, color="grey")+
+  geom_vline(aes(xintercept=1), lty=2, color="grey")+
+  geom_vline(aes(xintercept=0), lty=2, color="grey")+
+  theme_classic()
+```
+
+####Pole powierzchni pod krzywą ROC
+
+dla zbioru uczącego
+```{r}
+pole_AUC_logit<-as.numeric(auc(logit1$y, logit1$fitted.values))
+pole_AUC_probit<-as.numeric(auc(probit1$y, probit1$fitted.values))
+pole_AUC <- rbind(pole_AUC_logit, pole_AUC_probit)
+pole_AUC
+```
+
+dla zbioru testowego
+```{r}
+pole_AUC_logit<-as.numeric(auc(dane5_testowy$charges, predict(logit1, dane5_testowy, type = "response")))
+pole_AUC_probit<-as.numeric(auc(dane5_testowy$charges, predict(probit1, dane5_testowy, type = "response")))
+pole_AUC <- rbind(pole_AUC_logit, pole_AUC_probit)
+pole_AUC
+```
+
+**Wnioski**
+
+Na podstawie pola pod krzywą ROC można stwierdzić, że oba modele: `logit` oraz `probit` mają wystarczająco dobrą zdolność predykcyjną. Wartości spełniają równanie 0.5<=AUC<=1.
