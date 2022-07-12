@@ -1,5 +1,7 @@
 # Modeling-the-amount-of-treatment-costs-simple-multiple-regression-models-generalized-linear
 
+Group project managed by myself
+
 RStudio
 
 Polish:
