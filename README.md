@@ -1,6 +1,6 @@
 # Modeling-the-amount-of-treatment-costs-simple-multiple-regression-models-generalized-linear
 
-Group project managed by myself
+Group project managed by me
 
 RStudio
 
